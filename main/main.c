@@ -31,6 +31,9 @@
 #define ENABLE_HALF_STEPS false  // Set to true to enable tracking of rotary encoder at half step resolution
 #define FLIP_DIRECTION    false  // Set to true to reverse the clockwise/counterclockwise sense
 
+#define MEASURING_ROLL_DIAMETER 44
+#define PI 3.14159265358979323846
+
 
 
 
@@ -84,8 +87,13 @@ void task(void *pvParameter)
 
     ESP_ERROR_CHECK(max7219_init(&dev));
 
+    //0...15
+    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 12));
+
+
 
     char buf[10]; // 8 digits + decimal point + \0
+    int32_t distance_mm = 0;
 
     //display startup message
         max7219_clear(&dev);
@@ -110,8 +118,12 @@ void task(void *pvParameter)
                         event.state.direction ? (event.state.direction == ROTARY_ENCODER_DIRECTION_CLOCKWISE ? "CW" : "CCW") : "NOT_SET");
 
 
+                //--- calculate distalce ---
+                distance_mm = event.state.position * (MEASURING_ROLL_DIAMETER * PI / 600); //TODO dont calculate constant factor every time
                 //--- show current position on display ---
-                sprintf(buf, "%08d", event.state.position);
+                //sprintf(buf, "%08d", event.state.position);
+                //--- show current distance in cm on display ---
+                sprintf(buf, "%06.1f cm", (float)distance_mm/10);
                 //printf("float num\n");
                 max7219_clear(&dev);
                 max7219_draw_text_7seg(&dev, 0, buf);
