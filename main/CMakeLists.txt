@@ -4,6 +4,7 @@ idf_component_register(
         "config.cpp"
         "control.cpp"
         "buzzer.cpp"
+        "vfd.cpp"
     INCLUDE_DIRS 
         "."
     )

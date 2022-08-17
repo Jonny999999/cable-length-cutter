@@ -4,20 +4,16 @@ extern "C"
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <esp_idf_version.h>
 #include "freertos/queue.h"
 #include "esp_system.h"
 #include "esp_log.h"
-
-#include <max7219.h>
-#include "rotary_encoder.h"
 }
 
 #include "config.hpp"
-#include "gpio_evaluateSwitch.hpp"
-#include "buzzer.hpp"
-#include "vfd.hpp"
 
 
+//function for setting the state (run or stop)
+void vfd_setState(bool state);
 
-void task_control(void *pvParameter);
+//function for setting the speed level (1-7)
+void vfd_setSpeedLevel(uint8_t level = 0);

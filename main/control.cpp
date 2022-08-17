@@ -110,6 +110,7 @@ rotary_encoder_info_t encoder; //encoder device/info
 uint8_t count = 0; //count for testing
 uint32_t timestamp_pageSwitched = 0;
 bool page = false; //store page number currently displayed
+bool state = false; //store state of motor
 
                       
            
@@ -153,16 +154,32 @@ void task_control(void *pvParameter)
             display_current_distance(&display, &encoder);
         } else {
             //display counter
-            sprintf(display_buf, "cnt: %02d", count);
+            sprintf(display_buf, "lvl: %02d", count);
             max7219_draw_text_7seg(&display, 0, display_buf);
-            count++;
+            //count++;
         }
 
-        //test button
-        if(SW_START.risingEdge){
+
+        //testing: rotate through speed levels
+        if(SW_SET.risingEdge){
+            //rotate count 0-7
+            if (count >= 7){
+                count = 0;
+            } else {
+                count ++;
+            }
+            //set motor level
+            vfd_setSpeedLevel(count);
             buzzer.beep(1, 100, 100);
         }
 
+
+        //testing: toggle motor state
+        if(SW_START.risingEdge){
+            state = !state;
+            vfd_setState(state);
+            buzzer.beep(1, 500, 100);
+        }
     }
 
 }
