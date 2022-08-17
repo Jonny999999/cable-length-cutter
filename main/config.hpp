@@ -46,7 +46,6 @@
 //--------------------------
 //----- encoder config -----
 //--------------------------
-#define TAG "app"
 #define ROT_ENC_A_GPIO GPIO_NUM_19
 #define ROT_ENC_B_GPIO GPIO_NUM_21
 #define ENABLE_HALF_STEPS false  // Set to true to enable tracking of rotary encoder at half step resolution
