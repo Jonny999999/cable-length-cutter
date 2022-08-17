@@ -4,3 +4,6 @@ build
 # VIM files
 *.swp
 *.swo
+
+# drawio files
+*.bkp

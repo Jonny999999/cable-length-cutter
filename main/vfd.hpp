@@ -12,7 +12,7 @@ extern "C"
 #include "config.hpp"
 
 
-//function for setting the state (run or stop)
+//function for setting the state (motor on/off)
 void vfd_setState(bool state);
 
 //function for setting the speed level (1-7)
