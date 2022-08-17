@@ -1,3 +1,5 @@
+extern "C"
+{
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -8,36 +10,43 @@
 
 #include <max7219.h>
 #include "rotary_encoder.h"
+}
 
-//--------------------------
-//----- display config -----
-//--------------------------
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0)
-#define HOST    HSPI_HOST
-#else
-#define HOST    SPI2_HOST
-#endif
-#define DISPLAY_PIN_NUM_MOSI 23
-#define DISPLAY_PIN_NUM_CLK 18
-#define DISPLAY_PIN_NUM_CS 21
-#define DISPLAY_DELAY 2000
-
-//--------------------------
-//----- encoder config -----
-//--------------------------
-#define TAG "app"
-#define ROT_ENC_A_GPIO 16
-#define ROT_ENC_B_GPIO 17
-#define ENABLE_HALF_STEPS false  // Set to true to enable tracking of rotary encoder at half step resolution
-#define FLIP_DIRECTION    false  // Set to true to reverse the clockwise/counterclockwise sense
-
-#define MEASURING_ROLL_DIAMETER 44
-#define PI 3.14159265358979323846
+#include "gpio_evaluateSwitch.hpp"
+#include "config.hpp"
+#include "control.hpp"
+#include "buzzer.hpp"
 
 
 
+//function to configure gpio pin as output
+void gpio_configure_output(gpio_num_t gpio_pin){
+    gpio_pad_select_gpio(gpio_pin);
+    gpio_set_direction(gpio_pin, GPIO_MODE_OUTPUT);
+}
 
-void task(void *pvParameter)
+
+void init_gpios(){
+    //initialize all outputs
+    //4x stepper mosfets
+    gpio_configure_output(GPIO_VFD_FWD);
+    gpio_configure_output(GPIO_VFD_D0);
+    gpio_configure_output(GPIO_VFD_D1);
+    gpio_configure_output(GPIO_VFD_D2);
+    //2x power mosfets
+    gpio_configure_output(GPIO_MOS1);
+    gpio_configure_output(GPIO_MOS2);
+    //onboard relay and buzzer
+    gpio_configure_output(GPIO_RELAY);
+    gpio_configure_output(GPIO_BUZZER);
+    //5v regulator
+    gpio_configure_output(GPIO_NUM_17);
+}
+
+
+
+//task for testing the encoder and display
+void task_testing(void *pvParameter)
 {
 
     //========================
@@ -47,7 +56,7 @@ void task(void *pvParameter)
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
 
     // Initialise the rotary encoder device with the GPIOs for A and B signals
-    rotary_encoder_info_t info = { 0 };
+    rotary_encoder_info_t info;
     ESP_ERROR_CHECK(rotary_encoder_init(&info, ROT_ENC_A_GPIO, ROT_ENC_B_GPIO));
     ESP_ERROR_CHECK(rotary_encoder_enable_half_steps(&info, ENABLE_HALF_STEPS));
 #ifdef FLIP_DIRECTION
@@ -66,23 +75,21 @@ void task(void *pvParameter)
     //===== init display =====
     //========================
     // Configure SPI bus
-    spi_bus_config_t cfg = {
-       .mosi_io_num = DISPLAY_PIN_NUM_MOSI,
-       .miso_io_num = -1,
-       .sclk_io_num = DISPLAY_PIN_NUM_CLK,
-       .quadwp_io_num = -1,
-       .quadhd_io_num = -1,
-       .max_transfer_sz = 0,
-       .flags = 0
-    };
+    spi_bus_config_t cfg;
+       cfg.mosi_io_num = DISPLAY_PIN_NUM_MOSI;
+       cfg.miso_io_num = -1;
+       cfg.sclk_io_num = DISPLAY_PIN_NUM_CLK;
+       cfg.quadwp_io_num = -1;
+       cfg.quadhd_io_num = -1;
+       cfg.max_transfer_sz = 0;
+       cfg.flags = 0;
     ESP_ERROR_CHECK(spi_bus_initialize(HOST, &cfg, 1));
 
     // Configure device
-    max7219_t dev = {
-       .cascade_size = 1,
-       .digits = 8,
-       .mirrored = true
-    };
+    max7219_t dev;
+       dev.cascade_size = 1;
+       dev.digits = 8;
+       dev.mirrored = true;
     ESP_ERROR_CHECK(max7219_init_desc(&dev, HOST, MAX7219_MAX_CLOCK_SPEED_HZ, DISPLAY_PIN_NUM_CS));
 
     ESP_ERROR_CHECK(max7219_init(&dev));
@@ -111,7 +118,7 @@ void task(void *pvParameter)
 
 
             // Wait for incoming events on the event queue.
-            rotary_encoder_event_t event = { 0 };
+            rotary_encoder_event_t event;
             if (xQueueReceive(event_queue, &event, 1000 / portTICK_PERIOD_MS) == pdTRUE)
             {
                 ESP_LOGI(TAG, "Event: position %d, direction %s", event.state.position,
@@ -131,7 +138,7 @@ void task(void *pvParameter)
             else //no event for 1s
             {
                 // Poll current position and direction
-                rotary_encoder_state_t state = { 0 };
+                rotary_encoder_state_t state;
                 ESP_ERROR_CHECK(rotary_encoder_get_state(&info, &state));
                 ESP_LOGI(TAG, "Poll: position %d, direction %s", state.position,
                         state.direction ? (state.direction == ROTARY_ENCODER_DIRECTION_CLOCKWISE ? "CW" : "CCW") : "NOT_SET");
@@ -139,8 +146,6 @@ void task(void *pvParameter)
             }
         }
 }
-
-
 
 
 
@@ -183,9 +188,40 @@ void task(void *pvParameter)
 //    }
 //}
 
-void app_main()
-{
-    xTaskCreate(task, "task", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+
+//======================================
+//============ buzzer task =============
+//======================================
+//TODO: move the task creation to buzzer class (buzzer.cpp)
+//e.g. only have function buzzer.createTask() in app_main
+void task_buzzer( void * pvParameters ){
+    ESP_LOGI("task_buzzer", "Start of buzzer task...");
+        //run function that waits for a beep events to arrive in the queue
+        //and processes them
+        buzzer.processQueue();
 }
 
 
+
+
+
+
+extern "C" void app_main()
+{
+
+    //init outputs
+    init_gpios();
+    //enable 5V volate regulator
+    gpio_set_level(GPIO_NUM_17, 1);
+
+
+    //--- create task testing ---
+    xTaskCreate(task_testing, "task_testing", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+    //--- create task control ---
+    xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+    //--- create task for buzzer ---
+    xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);
+
+    //beep at startup
+    buzzer.beep(3, 70, 50);
+}
