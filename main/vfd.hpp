@@ -13,7 +13,7 @@ extern "C"
 
 
 //function for setting the state (motor on/off)
-void vfd_setState(bool state);
+void vfd_setState(bool stateNew);
 
 //function for setting the speed level (1-7)
-void vfd_setSpeedLevel(uint8_t level = 0);
+void vfd_setSpeedLevel(uint8_t levelNew = 0);

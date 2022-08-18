@@ -3,10 +3,23 @@
 #define CHECK_BIT(var,pos) (((var)>>(pos)) & 1)
 
 static const char *TAG = "vfd";
+uint8_t level = 0; //current speed level
+bool state = false; //current state
 
 
+//=============================
+//========= setState ==========
+//=============================
+void vfd_setState(bool stateNew){
+    //only proceed and send log output when state is actually changed
+    if (state == stateNew) {
+        //already at target state -> nothing todo
+        return;
+    }
 
-void vfd_setState(bool state){
+    //update stored state
+    state = stateNew;
+
     //turn motor on/off
     if (state == true) {
         gpio_set_level(GPIO_VFD_FWD, 1);
@@ -15,13 +28,27 @@ void vfd_setState(bool state){
         gpio_set_level(GPIO_VFD_FWD, 0);
         gpio_set_level(GPIO_RELAY, 0);
     }
-    ESP_LOGI(TAG, "set state to %i", (int)state);
+    ESP_LOGI(TAG, "CHANGED state to %i", (int)state);
 }
 
 
 
-void vfd_setSpeedLevel(uint8_t level){
+//=============================
+//======= setSpeedLevel =======
+//=============================
+void vfd_setSpeedLevel(uint8_t levelNew){
     //set speed level of VFD
+
+    //only proceed and send log output when level is actually changed
+    if (level == levelNew) {
+        //already at target level -> nothing todo
+        return;
+    }
+
+    //log change
+    ESP_LOGI(TAG, "CHANGING speed level from %i to %i", level, levelNew);
+    //update stored level
+    level = levelNew;
 
     //bit:2  1  0
     //lvl D2 D1 D0  Hz
@@ -67,7 +94,6 @@ void vfd_setSpeedLevel(uint8_t level){
         gpio_set_level(GPIO_VFD_D2, 0);        
     }
 
-    //log
-    ESP_LOGI(TAG, "Set level to %d", level);
-    ESP_LOGI(TAG, "pin state: D2=%i, D1=%i, D0=%i", (int)D2, (int)D1, (int)D0);
+    //log pin state
+    ESP_LOGI(TAG, " - pin state: D2=%i, D1=%i, D0=%i", (int)D2, (int)D1, (int)D0);
 }

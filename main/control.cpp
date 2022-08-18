@@ -72,30 +72,51 @@ int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
 
 
 
+
+
 //====================
 //==== variables =====
 //====================
 static const char *TAG = "control";
+
+const char* systemStateStr[4] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED"};
+systemState_t controlState = COUNTING;
+
+max7219_t display; //display device
 char buf_disp[20]; //both displays
 char buf_disp1[10];// 8 digits + decimal point + \0
 char buf_disp2[10];// 8 digits + decimal point + \0
 char buf_tmp[15];
-max7219_t display; //display device
-QueueHandle_t encoder_queue = NULL; //encoder event queue
+
 rotary_encoder_info_t encoder; //encoder device/info
+QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_state_t encoderState;
 
 uint8_t count = 0; //count for testing
 uint32_t timestamp_pageSwitched = 0;
 bool page = false; //store page number currently displayed
-bool state = false; //store state of motor
 int lengthNow = 0; //length measured in mm
 int lengthTarget = 3000; //target length in mm
+int lengthDiff = 0; //length difference
 int potiRead = 0; //voltage read from adc
+uint32_t timestamp_motorStarted = 0; //timestamp winding started
 
-systemState_t controlState = COUNTING;
 
+//===== change State =====
+//function for changing the controlState
+void changeState (systemState_t stateNew) {
+    //only proceed when state actually changed
+    if (controlState == stateNew){
+        //already at target state -> nothing to do
+        return;
+    }
+    //log change
+    ESP_LOGW(TAG, "changed state from %s to %s", systemStateStr[(int)controlState], systemStateStr[(int)stateNew]);
+    //change state
+    controlState = stateNew;
+}
                       
+
            
 //========================
 //===== control task =====
@@ -149,8 +170,7 @@ void task_control(void *pvParameter)
         // Poll current position and direction
         rotary_encoder_get_state(&encoder, &encoderState);
         //--- calculate distance ---
-        //lengthNow = encoderState.position * (MEASURING_ROLL_DIAMETER * PI); //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
-        lengthNow += 155;
+        lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI); //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
 
 
         //---------------------------
@@ -165,6 +185,7 @@ void task_control(void *pvParameter)
             //round to whole meters
             lengthTarget = round(lengthTarget / 1000) * 1000;
             //TODO update lengthTarget only at button release?
+            //TODO beep for each m step?
         }
         //beep
         if (SW_SET.risingEdge) {
@@ -175,27 +196,95 @@ void task_control(void *pvParameter)
         }
 
 
+
+        //---------------------------
+        //--------- buttons ---------
+        //---------------------------
         //TODO: ADD PRESET SWITCHES HERE
+        //--- RESET switch ---
+        if (SW_RESET.risingEdge) {
+            rotary_encoder_reset(&encoder);
+            lengthNow = 0;
+            buzzer.beep(1, 700, 100);
+        }
 
 
-        //--------------------------------
-        //--------- statemachine ---------
-        //--------------------------------
+
+        //---------------------------
+        //--------- control ---------
+        //---------------------------
+        //calculate length difference
+        lengthDiff = lengthNow - lengthTarget;
+
+        //--- stop conditions ---
+        //stop conditions that are checked in any mode
+        //disable motor and switch to COUNTING when start button released
+        if (SW_START.state == false) { //TODO use fallingEdge here more clean?
+            changeState(COUNTING);
+            vfd_setState(false);
+        } 
+        //disable motor and switch to TARGET_REACHED
+        else if (lengthDiff >= 0 ) {
+            //TODO: display "REACHED" on 7segment here or reached state (start pressed but reached)
+            changeState(TARGET_REACHED);
+            vfd_setState(false);
+        }
+
+        //--- statemachine ---
         switch (controlState) {
-            case COUNTING:
-
+            case COUNTING: //no motor action
+                //TODO stop motor here every run instead of at button event?
+                if (SW_START.risingEdge) {
+                    changeState(WINDING_START);
+                    vfd_setSpeedLevel(2); //start at low speed
+                    vfd_setState(true); //start motor
+                    timestamp_motorStarted = esp_log_timestamp(); //save time started
+                }
                 break;
 
-            case WINDING_START:
-
+            case WINDING_START: //wind slow for certain time
+                //TODO: cancel / stay in this state when no change to lengthNow
+                if (esp_log_timestamp() - timestamp_motorStarted > 4000) {
+                    changeState(WINDING);
+                }
+                //TESTING: SIMULATE LENGTH INCREASE
+                //lengthNow += 2;
                 break;
 
-            case WINDING:
-
+            case WINDING: //wind at dynamic speed
+                lengthDiff = abs(lengthDiff);
+                //adjust speed according to difference
+                if (lengthDiff < 10) {
+                    vfd_setSpeedLevel(1);
+                    //TESTING: SIMULATE LENGTH INCREASE
+                    //lengthNow += 1;
+                } else if (lengthDiff < 50) {
+                    vfd_setSpeedLevel(2);
+                    //TESTING: SIMULATE LENGTH INCREASE
+                    //lengthNow += 4;
+                } else if (lengthDiff < 200) {
+                    vfd_setSpeedLevel(3);
+                    //TESTING: SIMULATE LENGTH INCREASE
+                    //lengthNow += 6;
+                } else if (lengthDiff < 500) {
+                    vfd_setSpeedLevel(4);
+                    //TESTING: SIMULATE LENGTH INCREASE
+                    //lengthNow += 50;
+                } else if (lengthDiff < 1000) {
+                    vfd_setSpeedLevel(6);
+                    //TESTING: SIMULATE LENGTH INCREASE
+                    //lengthNow += 100;
+                } else { //more than last step
+                    vfd_setSpeedLevel(7);
+                    //TESTING: SIMULATE LENGTH INCREASE
+                    //lengthNow += 200;
+                }
+                //see "stop conditions" above that switches to TARGET_REACHED when targed reached
                 break;
 
             case TARGET_REACHED:
-
+                //nothing to do here yet
+                //see "stop conditions" above that switches to COUNTING when start button released
                 break;
         }
 
@@ -259,12 +348,6 @@ void task_control(void *pvParameter)
         //    buzzer.beep(1, 100, 100);
         //}
 
-        ////testing: toggle motor state
-        //if(SW_START.risingEdge){
-        //    state = !state;
-        //    vfd_setState(state);
-        //    buzzer.beep(1, 500, 100);
-        //}
     }
 
 }
