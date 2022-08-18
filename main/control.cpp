@@ -50,51 +50,25 @@ QueueHandle_t init_encoder(rotary_encoder_info_t * info){
 }
 
 
-//============================
-//===== display distance =====
-//============================
-//display current position in meters from current encoder count
-void display_current_distance(max7219_t * dev, rotary_encoder_info_t * info){
-    // --- event based action ---
-    // Wait for incoming events on the event queue.
-    // rotary_encoder_event_t event;
-    // if (xQueueReceive(event_queue, &event, 1000 / portTICK_PERIOD_MS) == pdTRUE)
-    // {
-    //     ESP_LOGI(TAG, "Event: position %d, direction %s", event.state.position,
-    //             event.state.direction ? (event.state.direction == ROTARY_ENCODER_DIRECTION_CLOCKWISE ? "CW" : "CCW") : "NOT_SET");
-    //     //--- calculate distalce ---
-    //     distance_mm = event.state.position * (MEASURING_ROLL_DIAMETER * PI / 600); //TODO dont calculate constant factor every time
-    //     //--- show current position on display ---
-    //     //sprintf(buf, "%08d", event.state.position);
-    //     //--- show current distance in cm on display ---
-    //     sprintf(buf, "%06.1f cm", (float)distance_mm/10);
-    //     //printf("float num\n");
-    //     max7219_clear(&dev);
-    //     max7219_draw_text_7seg(&dev, 0, buf);
-    // }
-    // else //no event for 1s
-    // {
-    //     // Poll current position and direction
-    //     rotary_encoder_state_t state;
-    //     ESP_ERROR_CHECK(rotary_encoder_get_state(&info, &state));
-    //     ESP_LOGI(TAG, "Poll: position %d, direction %s", state.position,
-    //             state.direction ? (state.direction == ROTARY_ENCODER_DIRECTION_CLOCKWISE ? "CW" : "CCW") : "NOT_SET");
-    // }
+//=============================
+//========= readAdc ===========
+//=============================
+//function for multisampling an anlog input
+int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
+    //make multiple measurements
+    int adc_reading = 0;
+    for (int i = 0; i < 16; i++) {
+        adc_reading += adc1_get_raw(adc_channel);
+    }
+    adc_reading = adc_reading / 16;
 
-    // Poll current position and direction
-    rotary_encoder_state_t state;
-    rotary_encoder_get_state(info, &state);
-    //--- calculate distalce ---
-    float distance_mm = state.position * (MEASURING_ROLL_DIAMETER * PI / 600); //TODO dont calculate constant factor every time
-
-    //--- show current position on display ---
-    char buf[10]; // 8 digits + decimal point + \0
-    sprintf(buf, "%06.1f cm", (float)distance_mm/10);
-    //printf("float num\n");
-    max7219_clear(dev);
-    max7219_draw_text_7seg(dev, 0, buf);
+    //return original or inverted result
+    if (inverted) {
+        return 4095 - adc_reading;
+    } else {
+        return adc_reading;
+    }
 }
-
 
 
 
@@ -102,15 +76,24 @@ void display_current_distance(max7219_t * dev, rotary_encoder_info_t * info){
 //==== variables =====
 //====================
 static const char *TAG = "control";
-char display_buf[20]; // 8 digits + decimal point + \0
+char buf_disp[20]; //both displays
+char buf_disp1[10];// 8 digits + decimal point + \0
+char buf_disp2[10];// 8 digits + decimal point + \0
+char buf_tmp[15];
 max7219_t display; //display device
 QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_info_t encoder; //encoder device/info
+rotary_encoder_state_t encoderState;
 
 uint8_t count = 0; //count for testing
 uint32_t timestamp_pageSwitched = 0;
 bool page = false; //store page number currently displayed
 bool state = false; //store state of motor
+int lengthNow = 0; //length measured in mm
+int lengthTarget = 3000; //target length in mm
+int potiRead = 0; //voltage read from adc
+
+systemState_t controlState = COUNTING;
 
                       
            
@@ -122,15 +105,19 @@ void task_control(void *pvParameter)
     //initialize display
     display = init_display();
     //initialize encoder
-    encoder_queue = init_encoder(&encoder);
+//both dispencoder_queue = init_encoder(&encoder);
 
-    //---- startup message ----
-    //display welcome message on 7 segment display
+    //-----------------------------------
+    //------- display welcome msg -------
+    //-----------------------------------
+    //display welcome message on 2 7 segment displays
+    //show name and date
     ESP_LOGI(TAG, "showing startup message...");
     max7219_clear(&display);
     max7219_draw_text_7seg(&display, 0, "CUTTER  20.08.2022");
     //                                   1234567812 34 5678
     vTaskDelay(pdMS_TO_TICKS(700));
+    //scroll "hello" over 2 displays
     for (int offset = 0; offset < 23; offset++) {
         max7219_clear(&display);
         char hello[23] = "                HELL0 ";
@@ -138,14 +125,15 @@ void task_control(void *pvParameter)
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
-        max7219_clear(&display);
-            sprintf(display_buf, "1ST 987.4");
-            max7219_draw_text_7seg(&display, 0, display_buf);
-
+    //================
     //===== loop =====
+    //================
     while(1){
         vTaskDelay(20 / portTICK_PERIOD_MS);
 
+        //-----------------------------
+        //------ handle switches ------
+        //-----------------------------
         //run handle functions for all switches
         SW_START.handle();
         SW_RESET.handle();
@@ -154,45 +142,129 @@ void task_control(void *pvParameter)
         SW_PRESET2.handle();
         SW_PRESET3.handle();
 
-      //  //switch between two display pages
-      //  if (esp_log_timestamp() - timestamp_pageSwitched > 1000){
-      //      timestamp_pageSwitched = esp_log_timestamp();
-      //      page = !page;
-      //  }
-      //  max7219_clear(&display);
-      //  if (page){
-      //      //display current position
-      //      display_current_distance(&display, &encoder);
-      //  } else {
-      //      //display counter
-      //      sprintf(display_buf, "lvl: %02d", count);
-      //      max7219_draw_text_7seg(&display, 0, display_buf);
-      //      //count++;
-      //  }
-            sprintf(display_buf, "S0LL 12.3");
-            max7219_draw_text_7seg(&display, 8, display_buf);
+
+        //----------------------------
+        //------ rotary encoder ------
+        //----------------------------
+        // Poll current position and direction
+        rotary_encoder_get_state(&encoder, &encoderState);
+        //--- calculate distance ---
+        //lengthNow = encoderState.position * (MEASURING_ROLL_DIAMETER * PI); //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
+        lengthNow += 155;
 
 
-        //testing: rotate through speed levels
-        if(SW_SET.risingEdge){
-            //rotate count 0-7
-            if (count >= 7){
-                count = 0;
-            } else {
-                count ++;
-            }
-            //set motor level
-            vfd_setSpeedLevel(count);
-            buzzer.beep(1, 100, 100);
+        //---------------------------
+        //------ potentiometer ------
+        //---------------------------
+        //set target length to poti position when set switch is pressed
+        if (SW_SET.state == true) {
+            //read adc
+            potiRead = readAdc(ADC_CHANNEL_POTI);
+            //scale to target length range
+            lengthTarget = (float)potiRead / 4095 * 50000;
+            //round to whole meters
+            lengthTarget = round(lengthTarget / 1000) * 1000;
+            //TODO update lengthTarget only at button release?
+        }
+        //beep
+        if (SW_SET.risingEdge) {
+            buzzer.beep(1, 100, 50);
+        }
+        if (SW_SET.fallingEdge) {
+            buzzer.beep(2, 100, 50);
         }
 
 
-        //testing: toggle motor state
-        if(SW_START.risingEdge){
-            state = !state;
-            vfd_setState(state);
-            buzzer.beep(1, 500, 100);
+        //TODO: ADD PRESET SWITCHES HERE
+
+
+        //--------------------------------
+        //--------- statemachine ---------
+        //--------------------------------
+        switch (controlState) {
+            case COUNTING:
+
+                break;
+
+            case WINDING_START:
+
+                break;
+
+            case WINDING:
+
+                break;
+
+            case TARGET_REACHED:
+
+                break;
         }
+
+
+
+        //---------------------------
+        //--------- display ---------
+        //---------------------------
+        //-- show current position on display1 ---
+        //sprintf(buf_tmp, "%06.1f cm", (float)lengthNow/10); //cm
+        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000); //m
+        //                123456789
+        //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
+        sprintf(buf_disp1, "%.9s", buf_tmp);
+
+        //--- show target length on display2 ---
+        //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
+        sprintf(buf_disp2, "S0LL%5.3f", (float)lengthTarget/1000); //m
+        //                  1234  5678
+        
+        //TODO: blink disp2 when set button pressed
+
+        //--- write to display ---
+        //max7219_clear(&display); //results in flickering display if same value anyways
+        max7219_draw_text_7seg(&display, 0, buf_disp1);
+        max7219_draw_text_7seg(&display, 8, buf_disp2);
+
+        //  //switch between two display pages
+        //  if (esp_log_timestamp() - timestamp_pageSwitched > 1000){
+        //      timestamp_pageSwitched = esp_log_timestamp();
+        //      page = !page;
+        //  }
+        //  max7219_clear(&display);
+        //  if (page){
+        //      //display current position
+        //      display_current_distance(&display, &encoder);
+        //  } else {
+        //      //display counter
+        //      sprintf(display_buf, "lvl: %02d", count);
+        //      max7219_draw_text_7seg(&display, 0, display_buf);
+        //      //count++;
+        //  }
+
+        //sprintf(display_buf, "S0LL 12.3");
+        //max7219_draw_text_7seg(&display, 8, display_buf);
+
+
+        //---------------------------
+        //--------- testing ---------
+        //---------------------------
+        ////testing: rotate through speed levels
+        //if(SW_SET.risingEdge){
+        //    //rotate count 0-7
+        //    if (count >= 7){
+        //        count = 0;
+        //    } else {
+        //        count ++;
+        //    }
+        //    //set motor level
+        //    vfd_setSpeedLevel(count);
+        //    buzzer.beep(1, 100, 100);
+        //}
+
+        ////testing: toggle motor state
+        //if(SW_START.risingEdge){
+        //    state = !state;
+        //    vfd_setState(state);
+        //    buzzer.beep(1, 500, 100);
+        //}
     }
 
 }

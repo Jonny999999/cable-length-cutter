@@ -7,6 +7,7 @@ extern "C"
 #include "freertos/queue.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "driver/adc.h"
 }
 
 #include "config.hpp"
@@ -38,6 +39,11 @@ void init_gpios(){
     gpio_configure_output(GPIO_BUZZER);
     //5v regulator
     gpio_configure_output(GPIO_NUM_17);
+
+    //initialize and configure ADC
+    adc1_config_width(ADC_WIDTH_BIT_12); //=> max resolution 4096
+    adc1_config_channel_atten(ADC_CHANNEL_POTI, ADC_ATTEN_DB_11); //max voltage
+
 }
 
 

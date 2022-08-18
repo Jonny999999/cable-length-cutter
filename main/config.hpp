@@ -1,6 +1,10 @@
 #pragma once
+extern "C" {
+#include "driver/adc.h"
+}
 #include "gpio_evaluateSwitch.hpp"
 #include "buzzer.hpp"
+
 
 //===================================
 //===== define output gpio pins =====
@@ -28,6 +32,7 @@
 #define GPIO_SW_PRESET3 GPIO_NUM_39
 
 #define GPIO_POTI GPIO_NUM_36
+#define ADC_CHANNEL_POTI ADC1_CHANNEL_0
 
 
 //--------------------------

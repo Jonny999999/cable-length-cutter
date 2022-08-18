@@ -8,10 +8,12 @@ extern "C"
 #include "freertos/queue.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "driver/adc.h"
 
 #include <max7219.h>
 #include "rotary_encoder.h"
 }
+#include <cmath>
 
 #include "config.hpp"
 #include "gpio_evaluateSwitch.hpp"
@@ -19,5 +21,7 @@ extern "C"
 #include "vfd.hpp"
 
 
+
+typedef enum systemState_t {COUNTING, WINDING_START, WINDING, TARGET_REACHED} systemState_t;
 
 void task_control(void *pvParameter);
