@@ -126,7 +126,7 @@ void task_control(void *pvParameter)
     //initialize display
     display = init_display();
     //initialize encoder
-//both dispencoder_queue = init_encoder(&encoder);
+    encoder_queue = init_encoder(&encoder);
 
     //-----------------------------------
     //------- display welcome msg -------
@@ -170,7 +170,7 @@ void task_control(void *pvParameter)
         // Poll current position and direction
         rotary_encoder_get_state(&encoder, &encoderState);
         //--- calculate distance ---
-        lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI); //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
+        lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI) / 600; //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
 
 
         //---------------------------
@@ -244,7 +244,7 @@ void task_control(void *pvParameter)
 
             case WINDING_START: //wind slow for certain time
                 //TODO: cancel / stay in this state when no change to lengthNow
-                if (esp_log_timestamp() - timestamp_motorStarted > 4000) {
+                if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
                     changeState(WINDING);
                 }
                 //TESTING: SIMULATE LENGTH INCREASE
