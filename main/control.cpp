@@ -17,8 +17,8 @@ max7219_t init_display(){
 
     // Configure device
     max7219_t dev;
-    dev.cascade_size = 1;
-    dev.digits = 8;
+    dev.cascade_size = 2;
+    dev.digits = 0;
     dev.mirrored = true;
     ESP_ERROR_CHECK(max7219_init_desc(&dev, HOST, MAX7219_MAX_CLOCK_SPEED_HZ, DISPLAY_PIN_NUM_CS));
     ESP_ERROR_CHECK(max7219_init(&dev));
@@ -102,7 +102,7 @@ void display_current_distance(max7219_t * dev, rotary_encoder_info_t * info){
 //==== variables =====
 //====================
 static const char *TAG = "control";
-char display_buf[10]; // 8 digits + decimal point + \0
+char display_buf[20]; // 8 digits + decimal point + \0
 max7219_t display; //display device
 QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_info_t encoder; //encoder device/info
@@ -124,12 +124,23 @@ void task_control(void *pvParameter)
     //initialize encoder
     encoder_queue = init_encoder(&encoder);
 
-    //display startup message
-    max7219_clear(&display);
+    //---- startup message ----
+    //display welcome message on 7 segment display
     ESP_LOGI(TAG, "showing startup message...");
-    max7219_draw_text_7seg(&display, 0, "ABCDEFGH");
-    vTaskDelay(pdMS_TO_TICKS(500));
+    max7219_clear(&display);
+    max7219_draw_text_7seg(&display, 0, "CUTTER  20.08.2022");
+    //                                   1234567812 34 5678
+    vTaskDelay(pdMS_TO_TICKS(700));
+    for (int offset = 0; offset < 23; offset++) {
+        max7219_clear(&display);
+        char hello[23] = "                HELL0 ";
+        max7219_draw_text_7seg(&display, 0, hello + (22 - offset) );
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
+        max7219_clear(&display);
+            sprintf(display_buf, "1ST 987.4");
+            max7219_draw_text_7seg(&display, 0, display_buf);
 
     //===== loop =====
     while(1){
@@ -143,21 +154,23 @@ void task_control(void *pvParameter)
         SW_PRESET2.handle();
         SW_PRESET3.handle();
 
-        //switch between two display pages
-        if (esp_log_timestamp() - timestamp_pageSwitched > 1000){
-            timestamp_pageSwitched = esp_log_timestamp();
-            page = !page;
-        }
-        max7219_clear(&display);
-        if (page){
-            //display current position
-            display_current_distance(&display, &encoder);
-        } else {
-            //display counter
-            sprintf(display_buf, "lvl: %02d", count);
-            max7219_draw_text_7seg(&display, 0, display_buf);
-            //count++;
-        }
+      //  //switch between two display pages
+      //  if (esp_log_timestamp() - timestamp_pageSwitched > 1000){
+      //      timestamp_pageSwitched = esp_log_timestamp();
+      //      page = !page;
+      //  }
+      //  max7219_clear(&display);
+      //  if (page){
+      //      //display current position
+      //      display_current_distance(&display, &encoder);
+      //  } else {
+      //      //display counter
+      //      sprintf(display_buf, "lvl: %02d", count);
+      //      max7219_draw_text_7seg(&display, 0, display_buf);
+      //      //count++;
+      //  }
+            sprintf(display_buf, "S0LL 12.3");
+            max7219_draw_text_7seg(&display, 8, display_buf);
 
 
         //testing: rotate through speed levels
