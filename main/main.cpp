@@ -32,7 +32,7 @@ void init_gpios(){
     gpio_configure_output(GPIO_VFD_D1);
     gpio_configure_output(GPIO_VFD_D2);
     //2x power mosfets
-    gpio_configure_output(GPIO_MOS1);
+    gpio_configure_output(GPIO_VFD_REV);
     gpio_configure_output(GPIO_MOS2);
     //onboard relay and buzzer
     gpio_configure_output(GPIO_RELAY);
@@ -77,6 +77,7 @@ extern "C" void app_main()
 
     //define loglevel
     esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("buzzer", ESP_LOG_ERROR);
     esp_log_level_set("control", ESP_LOG_INFO);
 
     //create task for controlling the machine

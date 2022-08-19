@@ -79,7 +79,7 @@ int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
 //====================
 static const char *TAG = "control";
 
-const char* systemStateStr[4] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED"};
+const char* systemStateStr[5] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "MANUAL"};
 systemState_t controlState = COUNTING;
 
 max7219_t display; //display device
@@ -116,6 +116,29 @@ void changeState (systemState_t stateNew) {
     controlState = stateNew;
 }
                       
+
+//===== check Stop Condition =====
+//function that checks whether start button is released or target is reached (used in multiple states)
+//returns true when stopped, false when no action
+bool checkStopCondition(){
+    //--- stop conditions ---
+    //stop conditions that are checked in any mode
+    //disable motor and switch to COUNTING when start button released
+    if (SW_START.state == false) { //TODO use fallingEdge here more clean?
+        changeState(COUNTING);
+        vfd_setState(false);
+        return true;
+    } 
+    //disable motor and switch to TARGET_REACHED
+    else if (lengthDiff >= 0 ) {
+        //TODO: display "REACHED" on 7segment here or reached state (start pressed but reached)
+        changeState(TARGET_REACHED);
+        vfd_setState(false);
+        return true;
+    } else {
+        return false;
+    }
+}
 
            
 //========================
@@ -207,6 +230,10 @@ void task_control(void *pvParameter)
             lengthNow = 0;
             buzzer.beep(1, 700, 100);
         }
+        //TODO add preset switches
+
+
+
 
 
 
@@ -216,29 +243,22 @@ void task_control(void *pvParameter)
         //calculate length difference
         lengthDiff = lengthNow - lengthTarget;
 
-        //--- stop conditions ---
-        //stop conditions that are checked in any mode
-        //disable motor and switch to COUNTING when start button released
-        if (SW_START.state == false) { //TODO use fallingEdge here more clean?
-            changeState(COUNTING);
-            vfd_setState(false);
-        } 
-        //disable motor and switch to TARGET_REACHED
-        else if (lengthDiff >= 0 ) {
-            //TODO: display "REACHED" on 7segment here or reached state (start pressed but reached)
-            changeState(TARGET_REACHED);
-            vfd_setState(false);
-        }
 
         //--- statemachine ---
         switch (controlState) {
             case COUNTING: //no motor action
-                //TODO stop motor here every run instead of at button event?
+                vfd_setState(false);
+                //--- start winding to length ---
                 if (SW_START.risingEdge) {
                     changeState(WINDING_START);
                     vfd_setSpeedLevel(2); //start at low speed
                     vfd_setState(true); //start motor
                     timestamp_motorStarted = esp_log_timestamp(); //save time started
+                } 
+                //--- switch to manual motor control (2 buttons + poti) ---
+                else if ( SW_PRESET2.state && (SW_PRESET1.state || SW_PRESET3.state) ) {
+                    changeState(MANUAL);
+                    buzzer.beep(4, 100, 60);
                 }
                 break;
 
@@ -247,6 +267,7 @@ void task_control(void *pvParameter)
                 if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
                     changeState(WINDING);
                 }
+                checkStopCondition();
                 //TESTING: SIMULATE LENGTH INCREASE
                 //lengthNow += 2;
                 break;
@@ -279,6 +300,7 @@ void task_control(void *pvParameter)
                     //TESTING: SIMULATE LENGTH INCREASE
                     //lengthNow += 200;
                 }
+                checkStopCondition();
                 //see "stop conditions" above that switches to TARGET_REACHED when targed reached
                 break;
 
@@ -286,6 +308,23 @@ void task_control(void *pvParameter)
                 //nothing to do here yet
                 //see "stop conditions" above that switches to COUNTING when start button released
                 break;
+
+            case MANUAL:
+                //P2 + P1 -> turn left
+                if ( SW_PRESET2.state && SW_PRESET1.state && !SW_PRESET3.state ) {
+                    vfd_setSpeedLevel(2); //TODO: use poti input for level
+                    vfd_setState(true, REV);
+                }
+                //P2 + P3 -> turn right
+                else if ( SW_PRESET2.state && SW_PRESET2.state && !SW_PRESET1.state ) {
+                    vfd_setSpeedLevel(2); //TODO: use poti input for level
+                    vfd_setState(true, FWD);
+                }
+                else { //no switch combination matches anymore
+                    vfd_setState(false);
+                    changeState(COUNTING);
+                    buzzer.beep(1, 1000, 100);
+                }
         }
 
 

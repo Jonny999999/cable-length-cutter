@@ -2,33 +2,48 @@
 
 #define CHECK_BIT(var,pos) (((var)>>(pos)) & 1)
 
+const char* vfd_directionStr[2] = {"FWD", "REV"};
 static const char *TAG = "vfd";
 uint8_t level = 0; //current speed level
 bool state = false; //current state
+vfd_direction_t direction = FWD; //current direction
 
 
 //=============================
 //========= setState ==========
 //=============================
-void vfd_setState(bool stateNew){
-    //only proceed and send log output when state is actually changed
-    if (state == stateNew) {
-        //already at target state -> nothing todo
+void vfd_setState(bool stateNew, vfd_direction_t directionNew){
+    //only proceed and send log output when state or direction actually changed
+    if ( state == stateNew && direction == directionNew ) {
+        //already at target state and target direction -> do nothing
         return;
     }
 
+    //log old and new state
+    ESP_LOGI(TAG, "CHANGING vfd state from: %i %s", (int)state, vfd_directionStr[(int)direction]);
+    ESP_LOGI(TAG, "CHANGING vfd state   to: %i %s", (int)stateNew, vfd_directionStr[(int)directionNew]);
     //update stored state
     state = stateNew;
+    direction = directionNew;
 
-    //turn motor on/off
+    //turn motor on/off with target direction
     if (state == true) {
-        gpio_set_level(GPIO_VFD_FWD, 1);
+        switch (direction) {
+            case FWD:
+                gpio_set_level(GPIO_VFD_REV, 0);
+                gpio_set_level(GPIO_VFD_FWD, 1);
+                break;
+            case REV:
+                gpio_set_level(GPIO_VFD_FWD, 0);
+                gpio_set_level(GPIO_VFD_REV, 1);
+                break;
+        }
         gpio_set_level(GPIO_RELAY, 1);
     } else {
         gpio_set_level(GPIO_VFD_FWD, 0);
+        gpio_set_level(GPIO_VFD_REV, 0);
         gpio_set_level(GPIO_RELAY, 0);
     }
-    ESP_LOGI(TAG, "CHANGED state to %i", (int)state);
 }
 
 

@@ -22,8 +22,8 @@ extern "C"
 
 
 
-typedef enum systemState_t {COUNTING, WINDING_START, WINDING, TARGET_REACHED} systemState_t;
-extern const char* systemStateStr[4];
+typedef enum systemState_t {COUNTING, WINDING_START, WINDING, TARGET_REACHED, MANUAL} systemState_t;
+extern const char* systemStateStr[5];
 
 
 void task_control(void *pvParameter);
