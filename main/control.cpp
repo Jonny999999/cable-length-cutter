@@ -61,7 +61,6 @@ int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
         adc_reading += adc1_get_raw(adc_channel);
     }
     adc_reading = adc_reading / 16;
-
     //return original or inverted result
     if (inverted) {
         return 4095 - adc_reading;
@@ -77,7 +76,7 @@ int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
 //====================
 //==== variables =====
 //====================
-static const char *TAG = "control";
+static const char *TAG = "control"; //tag for logging
 
 const char* systemStateStr[5] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "MANUAL"};
 systemState_t controlState = COUNTING;
@@ -97,19 +96,17 @@ uint32_t timestamp_pageSwitched = 0;
 bool page = false; //store page number currently displayed
 int lengthNow = 0; //length measured in mm
 int lengthTarget = 3000; //target length in mm
-int lengthDiff = 0; //length difference
-int lengthDiff_abs = 0; //length difference positive
+int lengthRemaining = 0; //(target - now) length needed for reaching the target
 int potiRead = 0; //voltage read from adc
 uint32_t timestamp_motorStarted = 0; //timestamp winding started
 
 
 //===== change State =====
-//function for changing the controlState
+//function for changing the controlState with log output
 void changeState (systemState_t stateNew) {
     //only proceed when state actually changed
     if (controlState == stateNew){
-        //already at target state -> nothing to do
-        return;
+        return; //already at target state -> nothing to do
     }
     //log change
     ESP_LOGW(TAG, "changed state from %s to %s", systemStateStr[(int)controlState], systemStateStr[(int)stateNew]);
@@ -118,22 +115,21 @@ void changeState (systemState_t stateNew) {
 }
                       
 
-//===== check Stop Condition =====
+//===== handle Stop Condition =====
 //function that checks whether start button is released or target is reached (used in multiple states)
 //returns true when stopped, false when no action
-bool checkStopCondition(){
+bool handleStopCondition(){
     //--- stop conditions ---
     //stop conditions that are checked in any mode
-    //disable motor and switch to COUNTING when start button released
-    if (SW_START.state == false) { //TODO use fallingEdge here more clean?
-        changeState(COUNTING);
+    //target reached
+    if (lengthRemaining <= 0 ) {
+        changeState(TARGET_REACHED);
         vfd_setState(false);
         return true;
-    } 
-    //disable motor and switch to TARGET_REACHED
-    else if (lengthDiff >= 0 ) {
-        //TODO: display "REACHED" on 7segment here or reached state (start pressed but reached)
-        changeState(TARGET_REACHED);
+    }
+    //start button released
+    else if (SW_START.state == false) {
+        changeState(COUNTING);
         vfd_setState(false);
         return true;
     } else {
@@ -197,28 +193,6 @@ void task_control(void *pvParameter)
         lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI) / 600; //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
 
 
-        //---------------------------
-        //------ potentiometer ------
-        //---------------------------
-        //set target length to poti position when set switch is pressed
-        if (SW_SET.state == true) {
-            //read adc
-            potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
-            //scale to target length range
-            lengthTarget = (float)potiRead / 4095 * 50000;
-            //round to whole meters
-            lengthTarget = round(lengthTarget / 1000) * 1000;
-            //TODO update lengthTarget only at button release?
-            //TODO beep for each m step?
-        }
-        //beep
-        if (SW_SET.risingEdge) {
-            buzzer.beep(1, 100, 50);
-        }
-        if (SW_SET.fallingEdge) {
-            buzzer.beep(2, 100, 50);
-        }
-
 
 
         //---------------------------
@@ -231,19 +205,57 @@ void task_control(void *pvParameter)
             lengthNow = 0;
             buzzer.beep(1, 700, 100);
         }
-        //TODO add preset switches
-        //--- switch to manual motor control (2 buttons + poti) ---
-        if ( SW_PRESET2.state && (SW_PRESET1.state || SW_PRESET3.state) ) {
-            //beep when state changed
-            if (controlState != MANUAL) {
-                buzzer.beep(3, 100, 60);
-            }
-            //change to manual state
+       
+
+        //--- manual mode ---
+        //switch to manual motor control (2 buttons + poti)
+        if ( SW_PRESET2.state && (SW_PRESET1.state || SW_PRESET3.state) && controlState != MANUAL ) {
+            //enable manual control
             changeState(MANUAL);
+            buzzer.beep(3, 100, 60);
         }
 
 
+        //--- set custom target length ---
+        //set target length to poti position when SET switch is pressed
+        if (SW_SET.state == true) {
+            //read adc
+            potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
+            //scale to target length range
+            int lengthTargetNew = (float)potiRead / 4095 * 50000;
+            //round to whole meters
+            lengthTarget = round(lengthTarget / 1000) * 1000;
+            //update target length and beep if changed
+            if (lengthTargetNew != lengthTarget) {
+                //TODO update lengthTarget only at button release?
+                lengthTarget = lengthTargetNew;
+                buzzer.beep(1, 60, 0);
+            }
+        }
+        //beep start and end of editing
+        if (SW_SET.risingEdge) {
+            buzzer.beep(1, 70, 50);
+        }
+        if (SW_SET.fallingEdge) {
+            buzzer.beep(2, 70, 50);
+        }
 
+
+        //--- target length presets ---
+        if (controlState != MANUAL) { //dont apply preset length while controlling motor with preset buttons
+            if (SW_PRESET1.risingEdge){
+                lengthTarget = 1000;
+                buzzer.beep(lengthTarget/1000, 50, 30);
+            }
+            else if (SW_PRESET2.risingEdge) {
+                lengthTarget = 5000;
+                buzzer.beep(lengthTarget/1000, 50, 30);
+            }
+            else if (SW_PRESET3.risingEdge) {
+                lengthTarget = 10000;
+                buzzer.beep(lengthTarget/1000, 50, 30);
+            }
+        }
 
 
 
@@ -251,8 +263,7 @@ void task_control(void *pvParameter)
         //--------- control ---------
         //---------------------------
         //calculate length difference
-        lengthDiff = lengthNow - lengthTarget;
-
+        lengthRemaining = lengthTarget - lengthNow;
 
         //--- statemachine ---
         switch (controlState) {
@@ -261,58 +272,48 @@ void task_control(void *pvParameter)
                 //--- start winding to length ---
                 if (SW_START.risingEdge) {
                     changeState(WINDING_START);
-                    vfd_setSpeedLevel(0); //start at low speed
+                    //TODO apply dynamic speed here too (if started when already very close)
+                    vfd_setSpeedLevel(1); //start at low speed 
                     vfd_setState(true); //start motor
                     timestamp_motorStarted = esp_log_timestamp(); //save time started
+                    buzzer.beep(1, 100, 0);
                 } 
                 break;
 
             case WINDING_START: //wind slow for certain time
-                //TODO: cancel / stay in this state when no change to lengthNow
+                //TODO: cancel when there is no cable movement anymore e.g. empty
                 if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
                     changeState(WINDING);
                 }
-                checkStopCondition();
-                //TESTING: SIMULATE LENGTH INCREASE
-                //lengthNow += 2;
+                handleStopCondition(); //stops if button released or target reached
                 break;
 
             case WINDING: //wind at dynamic speed
-                lengthDiff_abs = abs(lengthDiff);
                 //adjust speed according to difference
-                if (lengthDiff_abs < 10) {
+                if (lengthRemaining < 50) {
                     vfd_setSpeedLevel(0);
-                    //TESTING: SIMULATE LENGTH INCREASE
-                    //lengthNow += 1;
-                } else if (lengthDiff_abs < 100) {
+                } else if (lengthRemaining < 200) {
                     vfd_setSpeedLevel(1);
-                    //TESTING: SIMULATE LENGTH INCREASE
-                    //lengthNow += 4;
-                } else if (lengthDiff_abs < 500) {
+                } else if (lengthRemaining < 600) {
                     vfd_setSpeedLevel(2);
-                    //TESTING: SIMULATE LENGTH INCREASE
-                    //lengthNow += 50;
-                } else { //more than last step
+                } else { //more than last step remaining
                     vfd_setSpeedLevel(3);
-                    //TESTING: SIMULATE LENGTH INCREASE
-                    //lengthNow += 200;
                 }
                 //TODO add timeout
-                checkStopCondition();
-                //see "stop conditions" above that switches to TARGET_REACHED when targed reached
+                handleStopCondition(); //stops if button released or target reached
                 break;
 
             case TARGET_REACHED:
+                vfd_setState(false);
                 //switch to counting state when no longer at or above target length
-                if ( lengthDiff < 0 ) {
+                if ( lengthRemaining > 0 ) {
                     changeState(COUNTING);
                 }
-                //see "stop conditions" above that switches to COUNTING when start button released
                 break;
 
             case MANUAL: //manually control motor via preset buttons + poti
                 //read poti value
-            potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
+                potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
                 //scale poti to speed levels 0-3
                 uint8_t level = round( (float)potiRead / 4095 * 3 );
                 //exit manual mode if preset2 released
@@ -356,6 +357,7 @@ void task_control(void *pvParameter)
         //TODO: blink disp2 when set button pressed
         //TODO: blink disp2 when preset button pressed (exept manual mode)
         //TODO: write "MAN CTL" to disp2 when in manual mode
+        //TODO: display or blink "REACHED" when reached state and start pressed
 
         //--- write to display ---
         //max7219_clear(&display); //results in flickering display if same value anyways
@@ -380,23 +382,6 @@ void task_control(void *pvParameter)
 
         //sprintf(display_buf, "S0LL 12.3");
         //max7219_draw_text_7seg(&display, 8, display_buf);
-
-
-        //---------------------------
-        //--------- testing ---------
-        //---------------------------
-        ////testing: rotate through speed levels
-        //if(SW_SET.risingEdge){
-        //    //rotate count 0-7
-        //    if (count >= 7){
-        //        count = 0;
-        //    } else {
-        //        count ++;
-        //    }
-        //    //set motor level
-        //    vfd_setSpeedLevel(count);
-        //    buzzer.beep(1, 100, 100);
-        //}
 
     }
 
