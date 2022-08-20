@@ -309,21 +309,25 @@ void task_control(void *pvParameter)
                 //see "stop conditions" above that switches to COUNTING when start button released
                 break;
 
-            case MANUAL:
+            case MANUAL: //manually control motor via preset buttons + poti
+                //exit manual mode if preset2 released
+                if ( SW_PRESET2.state == false ) {
+                    changeState(COUNTING);
+                    buzzer.beep(1, 1000, 100);
+                }
                 //P2 + P1 -> turn left
-                if ( SW_PRESET2.state && SW_PRESET1.state && !SW_PRESET3.state ) {
+                else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
                     vfd_setSpeedLevel(2); //TODO: use poti input for level
                     vfd_setState(true, REV);
                 }
                 //P2 + P3 -> turn right
-                else if ( SW_PRESET2.state && SW_PRESET2.state && !SW_PRESET1.state ) {
+                else if ( SW_PRESET2.state && !SW_PRESET1.state ) {
                     vfd_setSpeedLevel(2); //TODO: use poti input for level
                     vfd_setState(true, FWD);
                 }
-                else { //no switch combination matches anymore
+                //no valid switch combination -> turn off motor
+                else {
                     vfd_setState(false);
-                    changeState(COUNTING);
-                    buzzer.beep(1, 1000, 100);
                 }
         }
 
@@ -345,6 +349,8 @@ void task_control(void *pvParameter)
         //                  1234  5678
         
         //TODO: blink disp2 when set button pressed
+        //TODO: blink disp2 when preset button pressed (exept manual mode)
+        //TODO: write "MAN CTL" to disp2 when in manual mode
 
         //--- write to display ---
         //max7219_clear(&display); //results in flickering display if same value anyways
