@@ -203,7 +203,7 @@ void task_control(void *pvParameter)
         //set target length to poti position when set switch is pressed
         if (SW_SET.state == true) {
             //read adc
-            potiRead = readAdc(ADC_CHANNEL_POTI);
+            potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
             lengthTarget = (float)potiRead / 4095 * 50000;
             //round to whole meters
@@ -311,6 +311,10 @@ void task_control(void *pvParameter)
                 break;
 
             case MANUAL: //manually control motor via preset buttons + poti
+                //read poti value
+            potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
+                //scale poti to speed levels 0-3
+                uint8_t level = round( (float)potiRead / 4095 * 3 );
                 //exit manual mode if preset2 released
                 if ( SW_PRESET2.state == false ) {
                     changeState(COUNTING);
@@ -318,12 +322,12 @@ void task_control(void *pvParameter)
                 }
                 //P2 + P1 -> turn left
                 else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
-                    vfd_setSpeedLevel(1); //TODO: use poti input for level
+                    vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, REV);
                 }
                 //P2 + P3 -> turn right
                 else if ( SW_PRESET3.state && !SW_PRESET1.state ) {
-                    vfd_setSpeedLevel(1); //TODO: use poti input for level
+                    vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, FWD);
                 }
                 //no valid switch combination -> turn off motor
