@@ -98,6 +98,7 @@ bool page = false; //store page number currently displayed
 int lengthNow = 0; //length measured in mm
 int lengthTarget = 3000; //target length in mm
 int lengthDiff = 0; //length difference
+int lengthDiff_abs = 0; //length difference positive
 int potiRead = 0; //voltage read from adc
 uint32_t timestamp_motorStarted = 0; //timestamp winding started
 
@@ -231,6 +232,15 @@ void task_control(void *pvParameter)
             buzzer.beep(1, 700, 100);
         }
         //TODO add preset switches
+        //--- switch to manual motor control (2 buttons + poti) ---
+        if ( SW_PRESET2.state && (SW_PRESET1.state || SW_PRESET3.state) ) {
+            //beep when state changed
+            if (controlState != MANUAL) {
+                buzzer.beep(3, 100, 60);
+            }
+            //change to manual state
+            changeState(MANUAL);
+        }
 
 
 
@@ -251,15 +261,10 @@ void task_control(void *pvParameter)
                 //--- start winding to length ---
                 if (SW_START.risingEdge) {
                     changeState(WINDING_START);
-                    vfd_setSpeedLevel(2); //start at low speed
+                    vfd_setSpeedLevel(0); //start at low speed
                     vfd_setState(true); //start motor
                     timestamp_motorStarted = esp_log_timestamp(); //save time started
                 } 
-                //--- switch to manual motor control (2 buttons + poti) ---
-                else if ( SW_PRESET2.state && (SW_PRESET1.state || SW_PRESET3.state) ) {
-                    changeState(MANUAL);
-                    buzzer.beep(4, 100, 60);
-                }
                 break;
 
             case WINDING_START: //wind slow for certain time
@@ -273,39 +278,35 @@ void task_control(void *pvParameter)
                 break;
 
             case WINDING: //wind at dynamic speed
-                lengthDiff = abs(lengthDiff);
+                lengthDiff_abs = abs(lengthDiff);
                 //adjust speed according to difference
-                if (lengthDiff < 10) {
-                    vfd_setSpeedLevel(1);
+                if (lengthDiff_abs < 10) {
+                    vfd_setSpeedLevel(0);
                     //TESTING: SIMULATE LENGTH INCREASE
                     //lengthNow += 1;
-                } else if (lengthDiff < 50) {
-                    vfd_setSpeedLevel(2);
+                } else if (lengthDiff_abs < 100) {
+                    vfd_setSpeedLevel(1);
                     //TESTING: SIMULATE LENGTH INCREASE
                     //lengthNow += 4;
-                } else if (lengthDiff < 200) {
-                    vfd_setSpeedLevel(3);
-                    //TESTING: SIMULATE LENGTH INCREASE
-                    //lengthNow += 6;
-                } else if (lengthDiff < 500) {
-                    vfd_setSpeedLevel(4);
+                } else if (lengthDiff_abs < 500) {
+                    vfd_setSpeedLevel(2);
                     //TESTING: SIMULATE LENGTH INCREASE
                     //lengthNow += 50;
-                } else if (lengthDiff < 1000) {
-                    vfd_setSpeedLevel(6);
-                    //TESTING: SIMULATE LENGTH INCREASE
-                    //lengthNow += 100;
                 } else { //more than last step
-                    vfd_setSpeedLevel(7);
+                    vfd_setSpeedLevel(3);
                     //TESTING: SIMULATE LENGTH INCREASE
                     //lengthNow += 200;
                 }
+                //TODO add timeout
                 checkStopCondition();
                 //see "stop conditions" above that switches to TARGET_REACHED when targed reached
                 break;
 
             case TARGET_REACHED:
-                //nothing to do here yet
+                //switch to counting state when no longer at or above target length
+                if ( lengthDiff < 0 ) {
+                    changeState(COUNTING);
+                }
                 //see "stop conditions" above that switches to COUNTING when start button released
                 break;
 
@@ -317,12 +318,12 @@ void task_control(void *pvParameter)
                 }
                 //P2 + P1 -> turn left
                 else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
-                    vfd_setSpeedLevel(2); //TODO: use poti input for level
+                    vfd_setSpeedLevel(1); //TODO: use poti input for level
                     vfd_setState(true, REV);
                 }
                 //P2 + P3 -> turn right
-                else if ( SW_PRESET2.state && !SW_PRESET1.state ) {
-                    vfd_setSpeedLevel(2); //TODO: use poti input for level
+                else if ( SW_PRESET3.state && !SW_PRESET1.state ) {
+                    vfd_setSpeedLevel(1); //TODO: use poti input for level
                     vfd_setState(true, FWD);
                 }
                 //no valid switch combination -> turn off motor
