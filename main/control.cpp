@@ -137,6 +137,32 @@ bool handleStopCondition(){
     }
 }
 
+
+//===== set dynamic speed level =====
+//function that sets the vfd speed level dynamicly depending on the remaining distance
+//closer to target -> slower
+void setDynSpeedLvl(uint8_t lvlMax = 3){
+    uint8_t lvl;
+    //define speed level according to difference
+    if (lengthRemaining < 50) {
+        lvl = 0;
+    } else if (lengthRemaining < 200) {
+        lvl = 1;
+    } else if (lengthRemaining < 600) {
+        lvl = 2;
+    } else { //more than last step remaining
+        lvl = 3;
+    }
+    //limit to max lvl
+    if (lvl > lvlMax){
+        lvl = lvlMax;
+    }
+    //update vfd speed level
+    vfd_setSpeedLevel(lvl);
+}
+
+
+
            
 //========================
 //===== control task =====
@@ -151,7 +177,7 @@ void task_control(void *pvParameter)
     //-----------------------------------
     //------- display welcome msg -------
     //-----------------------------------
-    //display welcome message on 2 7 segment displays
+    //display welcome message on two 7 segment displays
     //show name and date
     ESP_LOGI(TAG, "showing startup message...");
     max7219_clear(&display);
@@ -165,6 +191,7 @@ void task_control(void *pvParameter)
         max7219_draw_text_7seg(&display, 0, hello + (22 - offset) );
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+
 
     //================
     //===== loop =====
@@ -184,6 +211,7 @@ void task_control(void *pvParameter)
         SW_PRESET3.handle();
 
 
+
         //----------------------------
         //------ rotary encoder ------
         //----------------------------
@@ -191,7 +219,6 @@ void task_control(void *pvParameter)
         rotary_encoder_get_state(&encoder, &encoderState);
         //--- calculate distance ---
         lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI) / 600; //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
-
 
 
 
@@ -281,26 +308,20 @@ void task_control(void *pvParameter)
                 break;
 
             case WINDING_START: //wind slow for certain time
-                //TODO: cancel when there is no cable movement anymore e.g. empty
+                //set vfd speed depending on remaining distance 
+                setDynSpeedLvl(1); //limit to speed lvl 1 (force slow start)
                 if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
                     changeState(WINDING);
                 }
                 handleStopCondition(); //stops if button released or target reached
+                //TODO: cancel when there was no cable movement during start time?
                 break;
 
-            case WINDING: //wind at dynamic speed
-                //adjust speed according to difference
-                if (lengthRemaining < 50) {
-                    vfd_setSpeedLevel(0);
-                } else if (lengthRemaining < 200) {
-                    vfd_setSpeedLevel(1);
-                } else if (lengthRemaining < 600) {
-                    vfd_setSpeedLevel(2);
-                } else { //more than last step remaining
-                    vfd_setSpeedLevel(3);
-                }
-                //TODO add timeout
+            case WINDING: //wind fast, slow down when close
+                //set vfd speed depending on remaining distance 
+                setDynSpeedLvl(); //slow down when close to target
                 handleStopCondition(); //stops if button released or target reached
+                //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
                 break;
 
             case TARGET_REACHED:
