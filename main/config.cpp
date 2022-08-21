@@ -11,5 +11,5 @@ gpio_evaluatedSwitch SW_PRESET2(GPIO_SW_PRESET2, false, true); //pullup false, I
 gpio_evaluatedSwitch SW_PRESET3(GPIO_SW_PRESET3, false, true); //pullup false, INVERTED (switch to 3V3, pulldown on pcb soldered)
 
 
-//create buzzer object with gap between queued events of 100ms 
-buzzer_t buzzer(GPIO_BUZZER, 100);
+//create buzzer object with no gap between beep events
+buzzer_t buzzer(GPIO_BUZZER, 0);

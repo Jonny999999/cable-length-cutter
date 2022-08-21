@@ -34,12 +34,13 @@ buzzer_t::buzzer_t(gpio_num_t gpio_pin_f, uint16_t msGap_f){
 //=========== beep ===========
 //============================
 //function to add a beep command to the queue
-void buzzer_t::beep(uint8_t count, uint16_t msOn, uint16_t msOff){
+void buzzer_t::beep(uint8_t count, uint16_t msOn, uint16_t msOff, bool noGap){
     //create entry struct with provided data
     struct beepEntry entryInsert = {
         count = count,
         msOn = msOn,
-        msOff = msOff
+        msOff = msOff,
+        noGap = noGap
     };
 
     // Send a pointer to a struct AMessage object.  Don't block if the
@@ -83,8 +84,10 @@ void buzzer_t::processQueue(){
                     gpio_set_level(gpio_pin, 0);                
                     vTaskDelay(entryRead.msOff / portTICK_PERIOD_MS);
                 }
-                //wait for minimum gap between beep events
-                vTaskDelay(msGap / portTICK_PERIOD_MS);
+                if( entryRead.noGap == false ){
+                    //wait for minimum gap between beep events
+                    vTaskDelay(msGap / portTICK_PERIOD_MS);
+                }
             }
         }else{ //wait for queue to become available
             vTaskDelay(50 / portTICK_PERIOD_MS);

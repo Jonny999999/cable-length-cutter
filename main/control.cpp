@@ -209,14 +209,24 @@ void task_control(void *pvParameter)
             //read adc
             potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
-            int lengthTargetNew = (float)potiRead / 4095 * 50000;
-            //round to whole meters
-            lengthTarget = round(lengthTarget / 1000) * 1000;
-            //update target length and beep if changed
+            int lengthTargetNew = (float)potiRead / 4095 * 30000;
+            //apply hysteresis and round to whole meters //TODO optimize this
+            if (lengthTargetNew % 1000 < 200) { //round down if less than .2 meter
+                ESP_LOGD(TAG, "Poti input = %d -> rounding down", lengthTargetNew);
+                lengthTargetNew = (lengthTargetNew/1000 ) * 1000; //round down
+            } else if (lengthTargetNew % 1000 > 800 ) { //round up if more than .8 meter
+                ESP_LOGD(TAG, "Poti input = %d -> rounding up", lengthTargetNew);
+                lengthTargetNew = (lengthTargetNew/1000 + 1) * 1000; //round up
+            } else {
+                ESP_LOGD(TAG, "Poti input = %d -> hysteresis", lengthTargetNew);
+                lengthTargetNew = lengthTarget;
+            }
+            //update target length and beep when effectively changed
             if (lengthTargetNew != lengthTarget) {
                 //TODO update lengthTarget only at button release?
                 lengthTarget = lengthTargetNew;
-                buzzer.beep(1, 60, 0);
+                ESP_LOGI(TAG, "Changed target length to %d mm", lengthTarget);
+                buzzer.beep(1, 25, 10);
             }
         }
         //beep start and end of editing
@@ -232,15 +242,15 @@ void task_control(void *pvParameter)
         if (controlState != MANUAL) { //dont apply preset length while controlling motor with preset buttons
             if (SW_PRESET1.risingEdge){
                 lengthTarget = 1000;
-                buzzer.beep(lengthTarget/1000, 50, 30);
+                buzzer.beep(lengthTarget/1000, 25, 30);
             }
             else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 5000;
-                buzzer.beep(lengthTarget/1000, 50, 30);
+                buzzer.beep(lengthTarget/1000, 25, 30);
             }
             else if (SW_PRESET3.risingEdge) {
                 lengthTarget = 10000;
-                buzzer.beep(lengthTarget/1000, 50, 30);
+                buzzer.beep(lengthTarget/1000, 25, 30);
             }
         }
 
