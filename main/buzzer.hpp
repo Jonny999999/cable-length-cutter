@@ -27,7 +27,7 @@ class buzzer_t {
 
         //--- functions ---
         void processQueue(); //has to be run once in a separate task, waits for and processes queued events
-        void beep(uint8_t count, uint16_t msOn, uint16_t msOff);
+        void beep(uint8_t count, uint16_t msOn, uint16_t msOff, bool noGap = false);
         //void clear(); (TODO - not implemented yet)
         //void createTask(); (TODO - not implemented yet)
 
@@ -45,6 +45,7 @@ class buzzer_t {
             uint8_t count;
             uint16_t msOn;
             uint16_t msOff;
+            bool noGap;
         };
 
         //queue for queueing up multiple events while one is still processing
