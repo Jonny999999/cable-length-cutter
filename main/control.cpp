@@ -320,50 +320,42 @@ void task_control(void *pvParameter)
 
 
 
-        //---------------------------
-        //--------- display ---------
-        //---------------------------
-        //-- show current position on display1 ---
-        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000); //m
+        //--------------------------
+        //-------- display1 --------
+        //--------------------------
+        //show current position on display
+        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
         //                123456789
         //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
         sprintf(buf_disp1, "%.9s", buf_tmp);
         display1_showString(buf_disp1);
 
-        //--- show target length on display2 ---
-        //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
-        sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000); //m
-        //                  1234  5678
-        display2_showString(buf_tmp);
-        
+
+        //--------------------------
+        //-------- display2 --------
+        //--------------------------
+        //setting target length: blink target length
+        if (SW_SET.state == true){
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
+            display2_blinkStrings(buf_tmp, "        ", 400, 100);
+        }
+        //manual state: blink "manual"
+        else if (controlState == MANUAL) {
+            display2_blinkStrings(" MANUAL ", "        ", 1000, 500);
+        }
+        //otherwise show target length
+        else {
+            //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000); //m
+            //                1234  5678
+            display2_showString(buf_tmp);
+        }
+
+
         //TODO: blink disp2 when set button pressed
         //TODO: blink disp2 when preset button pressed (exept manual mode)
         //TODO: write "MAN CTL" to disp2 when in manual mode
         //TODO: display or blink "REACHED" when reached state and start pressed
-
-        //--- write to display ---
-        //max7219_clear(&display); //results in flickering display if same value anyways
-        //max7219_draw_text_7seg(&display, 0, buf_disp1);
-        //max7219_draw_text_7seg(&display, 8, buf_disp2);
-
-        //  //switch between two display pages
-        //  if (esp_log_timestamp() - timestamp_pageSwitched > 1000){
-        //      timestamp_pageSwitched = esp_log_timestamp();
-        //      page = !page;
-        //  }
-        //  max7219_clear(&display);
-        //  if (page){
-        //      //display current position
-        //      display_current_distance(&display, &encoder);
-        //  } else {
-        //      //display counter
-        //      sprintf(display_buf, "lvl: %02d", count);
-        //      max7219_draw_text_7seg(&display, 0, display_buf);
-        //      //count++;
-        //  }
-
-        //sprintf(display_buf, "S0LL 12.3");
-        //max7219_draw_text_7seg(&display, 8, display_buf);
 
     }
 

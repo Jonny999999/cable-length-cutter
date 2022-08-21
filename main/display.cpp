@@ -5,6 +5,17 @@
 static const char *TAG = "display"; //tag for logging
 max7219_t display;
 
+bool disp1_blinkMode = false;
+
+char disp2_strOn[20];
+char disp2_strOff[20];
+bool disp2_state = false;
+bool disp2_blinkMode = false;
+uint32_t disp2_timestampOn;
+uint32_t disp2_timestampOff;
+uint32_t disp2_msOn;
+uint32_t disp2_msOff;
+
 //========================
 //===== init display =====
 //========================
@@ -62,15 +73,69 @@ void display_ShowWelcomeMsg(){
 
 
 void display1_showString(const char * buf){
-        max7219_draw_text_7seg(&display, 0, buf);
+    max7219_draw_text_7seg(&display, 0, buf);
+    disp1_blinkMode = false;
 }
 void display2_showString(const char * buf){
-        max7219_draw_text_7seg(&display, 8, buf);
+    max7219_draw_text_7seg(&display, 8, buf);
+    disp2_blinkMode = false;
 }
 
 void display_showString(uint8_t pos, const char * buf){
-        max7219_draw_text_7seg(&display, pos, buf);
+    max7219_draw_text_7seg(&display, pos, buf);
 }
+
+
+
+
+//function that handles blinking of display2
+void display2_handle(){
+    if (disp2_blinkMode == false){
+        return;
+    }
+    //--- define state on/off ---
+    if (disp2_state == true){ //display in ON state
+        if (esp_log_timestamp() - disp2_timestampOn > disp2_msOn){
+            disp2_state = false;
+            disp2_timestampOff = esp_log_timestamp();
+        }
+    } else { //display in OFF state
+        if (esp_log_timestamp() - disp2_timestampOff > disp2_msOff) {
+            disp2_state = true;
+            disp2_timestampOn = esp_log_timestamp();
+        }
+    }
+
+    //--- draw text of current state ---
+    if (disp2_state) {
+        max7219_draw_text_7seg(&display, 8, disp2_strOn);
+    } else {
+        max7219_draw_text_7seg(&display, 8, disp2_strOff);
+    }
+}
+
+
+
+//function switches between two strings in a given interval
+void display2_blinkStrings(const char * strOn, const char * strOff, uint32_t msOn, uint32_t msOff){
+    //copy variables
+    strcpy(disp2_strOn, strOn);
+    strcpy(disp2_strOff, strOff);
+    disp2_msOn = msOn;
+    disp2_msOff = msOff;
+    //set to blink mode
+    disp2_blinkMode = true;
+    //run handle function for display update
+    display2_handle();
+}
+
+
+
+    
+
+
+
+
 
 //        //---------------------------
 //        //--------- display ---------

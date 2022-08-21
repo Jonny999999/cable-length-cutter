@@ -1,5 +1,7 @@
 #pragma once
+extern "C" {
 #include "driver/adc.h"
+}
 #include "gpio_evaluateSwitch.hpp"
 #include "buzzer.hpp"
 

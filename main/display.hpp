@@ -23,3 +23,8 @@ void display_ShowWelcomeMsg();
 void display1_showString(const char * buf);
 void display2_showString(const char * buf);
 void display_showString(uint8_t pos, const char * buf);
+
+//function that handles blinking of display2
+void display2_handle();
+//function switches between two strings in a given interval
+void display2_blinkStrings(const char * strOn, const char * strOff, uint32_t msOn, uint32_t msOff);
