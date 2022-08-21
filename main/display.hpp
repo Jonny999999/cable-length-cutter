@@ -13,6 +13,8 @@ extern "C"
 #include <max7219.h>
 #include "rotary_encoder.h"
 }
+#include <cstring>
+
 
 #include "config.hpp"
 

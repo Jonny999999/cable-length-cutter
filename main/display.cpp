@@ -9,8 +9,11 @@ max7219_t display;
 //===== init display =====
 //========================
 void display_init(){
+    
+    ESP_LOGI(TAG, "initializing display...");
     // Configure SPI bus
     spi_bus_config_t cfg;
+    memset(&cfg, 0, sizeof(spi_bus_config_t)); //init bus config with 0 to prevent bugs with random flags
     cfg.mosi_io_num = DISPLAY_PIN_NUM_MOSI;
     cfg.miso_io_num = -1;
     cfg.sclk_io_num = DISPLAY_PIN_NUM_CLK;
@@ -31,6 +34,7 @@ void display_init(){
     ESP_ERROR_CHECK(max7219_set_brightness(&dev, 12));
     //return dev;
     display = dev;
+    ESP_LOGI(TAG, "initializing display - done");
 }
 
 
@@ -49,7 +53,7 @@ void display_ShowWelcomeMsg(){
     //scroll "hello" over 2 displays
     for (int offset = 0; offset < 23; offset++) {
         max7219_clear(&display);
-        char hello[23] = "                HELL0 ";
+        char hello[40] = "                HELL0                 ";
         max7219_draw_text_7seg(&display, 0, hello + (22 - offset) );
         vTaskDelay(pdMS_TO_TICKS(50));
     }

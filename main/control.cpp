@@ -328,7 +328,7 @@ void task_control(void *pvParameter)
         //                123456789
         //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
         sprintf(buf_disp1, "%.9s", buf_tmp);
-        display1_showString(buf_tmp);
+        display1_showString(buf_disp1);
 
         //--- show target length on display2 ---
         //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
