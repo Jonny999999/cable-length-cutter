@@ -145,12 +145,15 @@ void task_control(void *pvParameter)
     encoder_queue = init_encoder(&encoder);
 
     //initialize display
-    display_init(); //outsourced in display.c
+    max7219_t two7SegDisplays = display_init();
+    //create two separate handled display instances
+    handledDisplay displayTop(two7SegDisplays, 0);
+    handledDisplay displayBot(two7SegDisplays, 8);
 
     //--- display welcome msg ---
     //display welcome message on two 7 segment displays
     //currently show name and date and scrolling 'hello'
-    display_ShowWelcomeMsg();
+    display_ShowWelcomeMsg(two7SegDisplays);
 
 
     //================
@@ -338,7 +341,7 @@ void task_control(void *pvParameter)
         //                123456789
         //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
         sprintf(buf_disp1, "%.9s", buf_tmp);
-        display1_showString(buf_disp1);
+        displayTop.showString(buf_disp1);
 
 
         //--------------------------
@@ -347,18 +350,18 @@ void task_control(void *pvParameter)
         //setting target length: blink target length
         if (SW_SET.state == true){
             sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
-            display2_blinkStrings(buf_tmp, "        ", 400, 100);
+            displayBot.blinkStrings(buf_tmp, "        ", 300, 100);
         }
         //manual state: blink "manual"
         else if (controlState == MANUAL) {
-            display2_blinkStrings(" MANUAL ", "        ", 1000, 500);
+            displayBot.blinkStrings(" MANUAL ", "        ", 1000, 800);
         }
         //otherwise show target length
         else {
             //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
             sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000); //m
             //                1234  5678
-            display2_showString(buf_tmp);
+            displayBot.showString(buf_tmp);
         }
 
 
