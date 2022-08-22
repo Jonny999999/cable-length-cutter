@@ -54,8 +54,10 @@ static const char *TAG = "control"; //tag for logging
 const char* systemStateStr[5] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "MANUAL"};
 systemState_t controlState = COUNTING;
 
-char buf10[10];// 8 digits + decimal point + \0
-char buf20[20];
+char buf_disp[20]; //both displays
+char buf_disp1[10];// 8 digits + decimal point + \0
+char buf_disp2[10];// 8 digits + decimal point + \0
+char buf_tmp[15];
 
 rotary_encoder_info_t encoder; //encoder device/info
 QueueHandle_t encoder_queue = NULL; //encoder event queue
@@ -69,7 +71,7 @@ int lengthTarget = 3000; //target length in mm
 int lengthRemaining = 0; //(target - now) length needed for reaching the target
 int potiRead = 0; //voltage read from adc
 uint32_t timestamp_motorStarted = 0; //timestamp winding started
-uint8_t manualSpeedLvl = 0; //current motor speed level in manual mode
+
 
 //===== change State =====
 //function for changing the controlState with log output
@@ -307,7 +309,7 @@ void task_control(void *pvParameter)
                 //read poti value
                 potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
                 //scale poti to speed levels 0-3
-                manualSpeedLvl = round( (float)potiRead / 4095 * 3 );
+                uint8_t level = round( (float)potiRead / 4095 * 3 );
                 //exit manual mode if preset2 released
                 if ( SW_PRESET2.state == false ) {
                     changeState(COUNTING);
@@ -315,12 +317,12 @@ void task_control(void *pvParameter)
                 }
                 //P2 + P1 -> turn left
                 else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
-                    vfd_setSpeedLevel(manualSpeedLvl); //TODO: use poti input for level
+                    vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, REV);
                 }
                 //P2 + P3 -> turn right
                 else if ( SW_PRESET3.state && !SW_PRESET1.state ) {
-                    vfd_setSpeedLevel(manualSpeedLvl); //TODO: use poti input for level
+                    vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, FWD);
                 }
                 //no valid switch combination -> turn off motor
@@ -335,11 +337,11 @@ void task_control(void *pvParameter)
         //-------- display1 --------
         //--------------------------
         //show current position on display
-        sprintf(buf20, "1ST %5.4f", (float)lengthNow/1000);
+        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
         //                123456789
         //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
-        sprintf(buf10, "%.9s", buf20);
-        displayTop.showString(buf10);
+        sprintf(buf_disp1, "%.9s", buf_tmp);
+        displayTop.showString(buf_disp1);
 
 
         //--------------------------
@@ -347,20 +349,19 @@ void task_control(void *pvParameter)
         //--------------------------
         //setting target length: blink target length
         if (SW_SET.state == true){
-            sprintf(buf10, "S0LL%5.3f", (float)lengthTarget/1000);
-            displayBot.blinkStrings(buf10, "S0LL    ", 300, 100);
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
+            displayBot.blinkStrings(buf_tmp, "        ", 300, 100);
         }
         //manual state: blink "manual"
         else if (controlState == MANUAL) {
-            sprintf(buf10, " lvl %02i ", manualSpeedLvl);
-            displayBot.blinkStrings(" MANUAL ", buf10, 1000, 800);
+            displayBot.blinkStrings(" MANUAL ", "        ", 1000, 800);
         }
         //otherwise show target length
         else {
             //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
-            sprintf(buf10, "S0LL%5.3f", (float)lengthTarget/1000); //m
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000); //m
             //                1234  5678
-            displayBot.showString(buf10);
+            displayBot.showString(buf_tmp);
         }
 
 
