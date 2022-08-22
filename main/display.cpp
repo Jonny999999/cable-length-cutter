@@ -34,7 +34,7 @@ max7219_t display_init(){
     ESP_ERROR_CHECK(max7219_init_desc(&dev, HOST, MAX7219_MAX_CLOCK_SPEED_HZ, DISPLAY_PIN_NUM_CS));
     ESP_ERROR_CHECK(max7219_init(&dev));
     //0...15
-    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 12));
+    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 9));
     return dev;
     //display = dev;
     ESP_LOGI(TAG, "initializing display - done");

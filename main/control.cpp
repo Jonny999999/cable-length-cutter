@@ -63,7 +63,6 @@ rotary_encoder_info_t encoder; //encoder device/info
 QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_state_t encoderState;
 
-uint8_t count = 0; //count for testing
 uint32_t timestamp_pageSwitched = 0;
 bool page = false; //store page number currently displayed
 int lengthNow = 0; //length measured in mm
@@ -319,15 +318,19 @@ void task_control(void *pvParameter)
                 else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
                     vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, REV);
+                    sprintf(buf_disp2, "[--%02i   ", level);
+                    //                  123 45 678
                 }
                 //P2 + P3 -> turn right
                 else if ( SW_PRESET3.state && !SW_PRESET1.state ) {
                     vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, FWD);
+                    sprintf(buf_disp2, "   %02i--]", level);
                 }
                 //no valid switch combination -> turn off motor
                 else {
                     vfd_setState(false);
+                    sprintf(buf_disp2, "   %02i   ", level);
                 }
         }
 
@@ -350,11 +353,11 @@ void task_control(void *pvParameter)
         //setting target length: blink target length
         if (SW_SET.state == true){
             sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
-            displayBot.blinkStrings(buf_tmp, "        ", 300, 100);
+            displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
         }
         //manual state: blink "manual"
         else if (controlState == MANUAL) {
-            displayBot.blinkStrings(" MANUAL ", "        ", 1000, 800);
+            displayBot.blinkStrings(" MANUAL ", buf_disp2, 1000, 1000);
         }
         //otherwise show target length
         else {
