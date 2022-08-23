@@ -237,6 +237,7 @@ void task_control(void *pvParameter)
         }
         if (SW_SET.fallingEdge) {
             buzzer.beep(2, 70, 50);
+            displayBot.blink(3, 100, 100, "S0LL    ");
         }
 
 
@@ -245,14 +246,17 @@ void task_control(void *pvParameter)
             if (SW_PRESET1.risingEdge){
                 lengthTarget = 1000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(3, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 5000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(3, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET3.risingEdge) {
                 lengthTarget = 10000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(3, 100, 100, "S0LL    ");
             }
         }
 
@@ -339,6 +343,8 @@ void task_control(void *pvParameter)
         //--------------------------
         //-------- display1 --------
         //--------------------------
+        //run handle function
+        displayTop.handle();
         //show current position on display
         sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
         //                123456789
@@ -350,6 +356,8 @@ void task_control(void *pvParameter)
         //--------------------------
         //-------- display2 --------
         //--------------------------
+        //run handle function
+        displayBot.handle();
         //setting target length: blink target length
         if (SW_SET.state == true){
             sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
