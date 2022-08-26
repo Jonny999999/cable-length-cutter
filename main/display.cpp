@@ -90,6 +90,7 @@ void handledDisplay::showString(const char * buf, uint8_t pos_f){
     //exit blinking mode
     if (mode == displayMode::BLINK_STRINGS){
         mode = displayMode::NORMAL;
+        ESP_LOGI(TAG, "pos:%i - disable blink strings mode -> normal mode str='%s'", posStart, strOn);
     }
     handle(); //draws the text depending on mode
 }
@@ -112,7 +113,7 @@ void handledDisplay::blinkStrings(const char * strOn_f, const char * strOff_f, u
     //if changed to blink mode just now:
     if (mode != displayMode::BLINK_STRINGS) {
         //switch mode
-        ESP_LOGI(TAG, "pos:%i changing to blink mode", posStart);
+        ESP_LOGI(TAG, "pos:%i - toggle blink strings mode on/off=%d/%d stings='%s'/'%s'", posStart, msOn, msOff, strOn, strOff);
         mode = displayMode::BLINK_STRINGS;
         //start with on state
         state = true;
@@ -129,18 +130,21 @@ void handledDisplay::blinkStrings(const char * strOn_f, const char * strOff_f, u
 //-------------------------------
 //function triggers certain count and interval of off durations
 void handledDisplay::blink(uint8_t count_f, uint32_t msOn_f, uint32_t msOff_f, const char * strOff_f) {
-    //set to blink mode
-    mode = displayMode::BLINK;
-    //copy parameters
+    //copy/update parameters
     count = count_f;
     msOn = msOn_f;
     msOff = msOff_f;
     strcpy(strOff, strOff_f);
     //FIXME this strings length must be dynamic depending on display size (posEnd - posStart) -> otherwise overwrites next segments if other display size or start pos
-    ESP_LOGI(TAG, "start blinking: count=%i  on/off=%d/%d", count, msOn, msOff);
-    //start with off state
-    state = false;
-    timestampOff = esp_log_timestamp();
+    //if changed to blink mode just now:
+    if (mode != displayMode::BLINK) {
+        //set to blink mode
+        mode = displayMode::BLINK;
+        ESP_LOGI(TAG, "pos:%i - start blinking: count=%i  on/off=%d/%d sting='%s'",posStart, count, msOn, msOff, strOff);
+        //start with off state
+        state = false;
+        timestampOff = esp_log_timestamp();
+    }
     //run handle function for display update
     handle();
 }
@@ -186,7 +190,7 @@ void handledDisplay::handle() {
             if (mode == displayMode::BLINK){
                 if (count == 0) {
                     mode = displayMode::NORMAL;
-                    ESP_LOGI(TAG, "finished blinking -> normal mode");
+                    ESP_LOGI(TAG, "pos:%i - finished blinking -> normal mode", posStart);
                 }
             }
             break;

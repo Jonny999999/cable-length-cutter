@@ -89,19 +89,25 @@ void changeState (systemState_t stateNew) {
 //===== handle Stop Condition =====
 //function that checks whether start button is released or target is reached (used in multiple states)
 //returns true when stopped, false when no action
-bool handleStopCondition(){
+bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBot){
     //--- stop conditions ---
     //stop conditions that are checked in any mode
     //target reached
     if (lengthRemaining <= 0 ) {
         changeState(TARGET_REACHED);
         vfd_setState(false);
+        displayTop->blink(1, 0, 1500, "  S0LL  ");
+        displayBot->blink(1, 0, 1500, "ERREICHT");
+        buzzer.beep(2, 100, 100);
         return true;
     }
     //start button released
     else if (SW_START.state == false) {
         changeState(COUNTING);
         vfd_setState(false);
+        displayTop->blink(2, 900, 1000, "- STOP -");
+        displayBot->blink(2, 900, 1000, " TASTER ");
+        buzzer.beep(3, 200, 100);
         return true;
     } else {
         return false;
@@ -237,7 +243,7 @@ void task_control(void *pvParameter)
         }
         if (SW_SET.fallingEdge) {
             buzzer.beep(2, 70, 50);
-            displayBot.blink(3, 100, 100, "S0LL    ");
+            displayBot.blink(2, 100, 100, "S0LL    ");
         }
 
 
@@ -251,12 +257,12 @@ void task_control(void *pvParameter)
             else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 5000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
-                displayBot.blink(3, 100, 100, "S0LL    ");
+                displayBot.blink(2, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET3.risingEdge) {
                 lengthTarget = 10000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
-                displayBot.blink(3, 100, 100, "S0LL    ");
+                displayBot.blink(2, 100, 100, "S0LL    ");
             }
         }
 
@@ -272,6 +278,7 @@ void task_control(void *pvParameter)
         switch (controlState) {
             case COUNTING: //no motor action
                 vfd_setState(false);
+                //TODO check stop condition before starting - prevents motor from starting 2 cycles when 
                 //--- start winding to length ---
                 if (SW_START.risingEdge) {
                     changeState(WINDING_START);
@@ -289,14 +296,14 @@ void task_control(void *pvParameter)
                 if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
                     changeState(WINDING);
                 }
-                handleStopCondition(); //stops if button released or target reached
+                handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
                 //TODO: cancel when there was no cable movement during start time?
                 break;
 
             case WINDING: //wind fast, slow down when close
                 //set vfd speed depending on remaining distance 
                 setDynSpeedLvl(); //slow down when close to target
-                handleStopCondition(); //stops if button released or target reached
+                handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
                 //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
                 break;
 
@@ -305,6 +312,12 @@ void task_control(void *pvParameter)
                 //switch to counting state when no longer at or above target length
                 if ( lengthRemaining > 0 ) {
                     changeState(COUNTING);
+                }
+                //show msg when trying to start, but target is reached
+                if (SW_START.risingEdge){
+                    buzzer.beep(3, 40, 30);
+                    displayTop.blink(2, 600, 800, "  S0LL  ");
+                    displayBot.blink(2, 600, 800, "ERREICHT");
                 }
                 break;
 
