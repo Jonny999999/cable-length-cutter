@@ -1,32 +1,5 @@
 #include "control.hpp"
 
-//========================
-//===== init display =====
-//========================
-max7219_t init_display(){
-    // Configure SPI bus
-    spi_bus_config_t cfg;
-    cfg.mosi_io_num = DISPLAY_PIN_NUM_MOSI;
-    cfg.miso_io_num = -1;
-    cfg.sclk_io_num = DISPLAY_PIN_NUM_CLK;
-    cfg.quadwp_io_num = -1;
-    cfg.quadhd_io_num = -1;
-    cfg.max_transfer_sz = 0;
-    cfg.flags = 0;
-    ESP_ERROR_CHECK(spi_bus_initialize(HOST, &cfg, 1));
-
-    // Configure device
-    max7219_t dev;
-    dev.cascade_size = 2;
-    dev.digits = 0;
-    dev.mirrored = true;
-    ESP_ERROR_CHECK(max7219_init_desc(&dev, HOST, MAX7219_MAX_CLOCK_SPEED_HZ, DISPLAY_PIN_NUM_CS));
-    ESP_ERROR_CHECK(max7219_init(&dev));
-    //0...15
-    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 12));
-    return dev;
-}
-
 
 //========================
 //===== init encoder =====
@@ -81,7 +54,6 @@ static const char *TAG = "control"; //tag for logging
 const char* systemStateStr[5] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "MANUAL"};
 systemState_t controlState = COUNTING;
 
-max7219_t display; //display device
 char buf_disp[20]; //both displays
 char buf_disp1[10];// 8 digits + decimal point + \0
 char buf_disp2[10];// 8 digits + decimal point + \0
@@ -91,7 +63,6 @@ rotary_encoder_info_t encoder; //encoder device/info
 QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_state_t encoderState;
 
-uint8_t count = 0; //count for testing
 uint32_t timestamp_pageSwitched = 0;
 bool page = false; //store page number currently displayed
 int lengthNow = 0; //length measured in mm
@@ -120,19 +91,25 @@ void changeState (systemState_t stateNew) {
 //===== handle Stop Condition =====
 //function that checks whether start button is released or target is reached (used in multiple states)
 //returns true when stopped, false when no action
-bool handleStopCondition(){
+bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBot){
     //--- stop conditions ---
     //stop conditions that are checked in any mode
     //target reached
     if (lengthRemaining <= 0 ) {
         changeState(TARGET_REACHED);
         vfd_setState(false);
+        displayTop->blink(1, 0, 1500, "  S0LL  ");
+        displayBot->blink(1, 0, 1500, "ERREICHT");
+        buzzer.beep(2, 100, 100);
         return true;
     }
     //start button released
     else if (SW_START.state == false) {
         changeState(COUNTING);
         vfd_setState(false);
+        displayTop->blink(2, 900, 1000, "- STOP -");
+        displayBot->blink(2, 900, 1000, " TASTER ");
+        buzzer.beep(3, 200, 100);
         return true;
     } else {
         return false;
@@ -171,28 +148,19 @@ void setDynSpeedLvl(uint8_t lvlMax = 3){
 //========================
 void task_control(void *pvParameter)
 {
-    //initialize display
-    display = init_display();
     //initialize encoder
     encoder_queue = init_encoder(&encoder);
 
-    //-----------------------------------
-    //------- display welcome msg -------
-    //-----------------------------------
+    //initialize display
+    max7219_t two7SegDisplays = display_init();
+    //create two separate handled display instances
+    handledDisplay displayTop(two7SegDisplays, 0);
+    handledDisplay displayBot(two7SegDisplays, 8);
+
+    //--- display welcome msg ---
     //display welcome message on two 7 segment displays
-    //show name and date
-    ESP_LOGI(TAG, "showing startup message...");
-    max7219_clear(&display);
-    max7219_draw_text_7seg(&display, 0, "CUTTER  20.08.2022");
-    //                                   1234567812 34 5678
-    vTaskDelay(pdMS_TO_TICKS(700));
-    //scroll "hello" over 2 displays
-    for (int offset = 0; offset < 23; offset++) {
-        max7219_clear(&display);
-        char hello[23] = "                HELL0 ";
-        max7219_draw_text_7seg(&display, 0, hello + (22 - offset) );
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
+    //currently show name and date and scrolling 'hello'
+    display_ShowWelcomeMsg(two7SegDisplays);
 
 
     //================
@@ -278,6 +246,7 @@ void task_control(void *pvParameter)
         }
         if (SW_SET.fallingEdge) {
             buzzer.beep(2, 70, 50);
+            displayBot.blink(2, 100, 100, "S0LL    ");
         }
 
 
@@ -286,14 +255,17 @@ void task_control(void *pvParameter)
             if (SW_PRESET1.risingEdge){
                 lengthTarget = 1000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(3, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 5000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(2, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET3.risingEdge) {
                 lengthTarget = 10000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(2, 100, 100, "S0LL    ");
             }
         }
 
@@ -309,6 +281,7 @@ void task_control(void *pvParameter)
         switch (controlState) {
             case COUNTING: //no motor action
                 vfd_setState(false);
+                //TODO check stop condition before starting - prevents motor from starting 2 cycles when 
                 //--- start winding to length ---
                 if (SW_START.risingEdge) {
                     changeState(WINDING_START);
@@ -326,14 +299,14 @@ void task_control(void *pvParameter)
                 if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
                     changeState(WINDING);
                 }
-                handleStopCondition(); //stops if button released or target reached
+                handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
                 //TODO: cancel when there was no cable movement during start time?
                 break;
 
             case WINDING: //wind fast, slow down when close
                 //set vfd speed depending on remaining distance 
                 setDynSpeedLvl(); //slow down when close to target
-                handleStopCondition(); //stops if button released or target reached
+                handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
                 //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
                 break;
 
@@ -342,6 +315,12 @@ void task_control(void *pvParameter)
                 //switch to counting state when no longer at or above target length
                 if ( lengthRemaining > 0 ) {
                     changeState(COUNTING);
+                }
+                //show msg when trying to start, but target is reached
+                if (SW_START.risingEdge){
+                    buzzer.beep(3, 40, 30);
+                    displayTop.blink(2, 600, 800, "  S0LL  ");
+                    displayBot.blink(2, 600, 800, "ERREICHT");
                 }
                 break;
 
@@ -359,78 +338,90 @@ void task_control(void *pvParameter)
                 else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
                     vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, REV);
+                    sprintf(buf_disp2, "[--%02i   ", level);
+                    //                  123 45 678
                 }
                 //P2 + P3 -> turn right
                 else if ( SW_PRESET3.state && !SW_PRESET1.state ) {
                     vfd_setSpeedLevel(level); //TODO: use poti input for level
                     vfd_setState(true, FWD);
+                    sprintf(buf_disp2, "   %02i--]", level);
                 }
                 //no valid switch combination -> turn off motor
                 else {
                     vfd_setState(false);
+                    sprintf(buf_disp2, "   %02i   ", level);
                 }
         }
 
 
 
-        //---------------------------
-        //--------- display ---------
-        //---------------------------
+        //--------------------------
+        //------ encoder test ------
+        //--------------------------
 #ifdef ENCODER_TEST
+        //run display handle functions
+        displayTop.handle();
+        displayBot.handle();
         //-- show encoder steps on display1 ---
         sprintf(buf_disp1, "EN %05d", encoderState.position); //count
+        displayTop.showString(buf_disp1);
         //--- show converted distance on display2 ---
         sprintf(buf_disp2, "Met %5.3f", (float)lengthNow/1000); //m
+        displayBot.showString(buf_disp2);
         //--- beep every 1m ---
         //note: only works precicely in forward/positive direction
         if (lengthNow % 1000 < 50) { //with tolerance in case of missed exact value
             if (fabs(lengthNow - lengthBeeped) >= 900) { //dont beep multiple times at same meter
                 //TODO: add case for reverse direction. currently beeps 0.1 too early
-                buzzer.beep(1, 400, 100);
+                buzzer.beep(1, 400, 100 );
                 lengthBeeped = lengthNow;
             }
         }
 #else
-        //-- show current position on display1 ---
-        //sprintf(buf_tmp, "%06.1f cm", (float)lengthNow/10); //cm
-        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000); //m
+
+        //--------------------------
+        //-------- display1 --------
+        //--------------------------
+        //run handle function
+        displayTop.handle();
+        //show current position on display
+        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
+        //                123456789
         //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
         sprintf(buf_disp1, "%.9s", buf_tmp);
+        displayTop.showString(buf_disp1);
 
-        //--- show target length on display2 ---
-        //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
-        sprintf(buf_disp2, "S0LL%5.3f", (float)lengthTarget/1000); //m
-        //                  123456789
+
+        //--------------------------
+        //-------- display2 --------
+        //--------------------------
+        //run handle function
+        displayBot.handle();
+        //setting target length: blink target length
+        if (SW_SET.state == true){
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
+            displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
+        }
+        //manual state: blink "manual"
+        else if (controlState == MANUAL) {
+            displayBot.blinkStrings(" MANUAL ", buf_disp2, 1000, 1000);
+        }
+        //otherwise show target length
+        else {
+            //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000); //m
+            //                1234  5678
+            displayBot.showString(buf_tmp);
+        }
+
+
 #endif
         
         //TODO: blink disp2 when set button pressed
         //TODO: blink disp2 when preset button pressed (exept manual mode)
         //TODO: write "MAN CTL" to disp2 when in manual mode
         //TODO: display or blink "REACHED" when reached state and start pressed
-
-        //--- write to display ---
-        //max7219_clear(&display); //results in flickering display if same value anyways
-        max7219_draw_text_7seg(&display, 0, buf_disp1);
-        max7219_draw_text_7seg(&display, 8, buf_disp2);
-
-        //  //switch between two display pages
-        //  if (esp_log_timestamp() - timestamp_pageSwitched > 1000){
-        //      timestamp_pageSwitched = esp_log_timestamp();
-        //      page = !page;
-        //  }
-        //  max7219_clear(&display);
-        //  if (page){
-        //      //display current position
-        //      display_current_distance(&display, &encoder);
-        //  } else {
-        //      //display counter
-        //      sprintf(display_buf, "lvl: %02d", count);
-        //      max7219_draw_text_7seg(&display, 0, display_buf);
-        //      //count++;
-        //  }
-
-        //sprintf(display_buf, "S0LL 12.3");
-        //max7219_draw_text_7seg(&display, 8, display_buf);
 
     }
 

@@ -10,8 +10,9 @@ extern "C"
 #include "esp_log.h"
 #include "driver/adc.h"
 
-#include <max7219.h>
 #include "rotary_encoder.h"
+#include "max7219.h"
+
 }
 #include <cmath>
 
@@ -19,6 +20,7 @@ extern "C"
 #include "gpio_evaluateSwitch.hpp"
 #include "buzzer.hpp"
 #include "vfd.hpp"
+#include "display.hpp"
 
 
 
