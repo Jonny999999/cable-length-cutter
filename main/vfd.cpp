@@ -77,12 +77,13 @@ void vfd_setSpeedLevel(uint8_t levelNew){
     //7   1  1  1   70
 
     //limit to 7
-    if (level > 7) {
-        level = 7;
+    if (level > 3) {
+        level = 3;
     }
 
     //variables for logging the pin state
-    bool D0, D1, D2;
+    //bool D0, D1, D2;
+    bool D0, D1;
 
     //set output state according to corresponding bit state
     if CHECK_BIT(level, 0) {
@@ -101,14 +102,15 @@ void vfd_setSpeedLevel(uint8_t levelNew){
         gpio_set_level(GPIO_VFD_D1, 0);        
     }
 
-    if CHECK_BIT(level, 2) {
-        D2 = true;
-        gpio_set_level(GPIO_VFD_D2, 1);        
-    } else {
-        D2 = false;
-        gpio_set_level(GPIO_VFD_D2, 0);        
-    }
+//    if CHECK_BIT(level, 2) {
+//        D2 = true;
+//        gpio_set_level(GPIO_VFD_D2, 1);        
+//    } else {
+//        D2 = false;
+//        gpio_set_level(GPIO_VFD_D2, 0);        
+//    }
 
     //log pin state
-    ESP_LOGI(TAG, " - pin state: D2=%i, D1=%i, D0=%i", (int)D2, (int)D1, (int)D0);
+    //ESP_LOGI(TAG, " - pin state: D2=%i, D1=%i, D0=%i", (int)D2, (int)D1, (int)D0);
+    ESP_LOGI(TAG, " - pin state: D1=%i, D0=%i", (int)D1, (int)D0);
 }

@@ -11,11 +11,11 @@ extern "C" {
 //===================================
 //4x stepper mosfet outputs for VFD
 #define GPIO_VFD_FWD GPIO_NUM_4     //ST4
-#define GPIO_VFD_D0 GPIO_NUM_16     //ST3
-#define GPIO_VFD_D1 GPIO_NUM_2      //ST2
-#define GPIO_VFD_D2 GPIO_NUM_15     //ST1
+#define GPIO_VFD_REV GPIO_NUM_16    //ST3
+#define GPIO_VFD_D0 GPIO_NUM_2      //ST2
+#define GPIO_VFD_D1 GPIO_NUM_15     //ST1
+//#define GPIO_VFD_D2 GPIO_NUM_15     //ST1 (D2 only used with 7.5kw vfd)
 
-#define GPIO_VFD_REV GPIO_NUM_18    //mos1
 #define GPIO_MOS2 GPIO_NUM_5        //mos2
 #define GPIO_RELAY GPIO_NUM_13
 #define GPIO_BUZZER GPIO_NUM_12

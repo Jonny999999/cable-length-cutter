@@ -19,5 +19,5 @@ extern const char* vfd_directionStr[2];
 //function for setting the state and optional direction of the motor: on/off, FWD/REV (default FWD)
 void vfd_setState(bool stateNew, vfd_direction_t direction = FWD);
 
-//function for setting the speed level (1-7)
+//function for setting the speed level (0-3)
 void vfd_setSpeedLevel(uint8_t levelNew = 0);
