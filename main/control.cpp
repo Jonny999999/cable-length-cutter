@@ -99,6 +99,8 @@ int lengthTarget = 3000; //target length in mm
 int lengthRemaining = 0; //(target - now) length needed for reaching the target
 int potiRead = 0; //voltage read from adc
 uint32_t timestamp_motorStarted = 0; //timestamp winding started
+                                     
+int lengthBeeped = 0; //only beep once per meter during encoder test
 
 
 //===== change State =====
@@ -218,7 +220,8 @@ void task_control(void *pvParameter)
         // Poll current position and direction
         rotary_encoder_get_state(&encoder, &encoderState);
         //--- calculate distance ---
-        lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI) / 600; //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
+        //lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI) / 600; //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
+        lengthNow = (float)encoderState.position * 1000 / STEPS_PER_METER;
 
 
 
@@ -373,17 +376,32 @@ void task_control(void *pvParameter)
         //---------------------------
         //--------- display ---------
         //---------------------------
+#ifdef ENCODER_TEST
+        //-- show encoder steps on display1 ---
+        sprintf(buf_disp1, "EN %05d", encoderState.position); //count
+        //--- show converted distance on display2 ---
+        sprintf(buf_disp2, "Met %5.3f", (float)lengthNow/1000); //m
+        //--- beep every 1m ---
+        //note: only works precicely in forward/positive direction
+        if (lengthNow % 1000 < 50) { //with tolerance in case of missed exact value
+            if (fabs(lengthNow - lengthBeeped) >= 900) { //dont beep multiple times at same meter
+                //TODO: add case for reverse direction. currently beeps 0.1 too early
+                buzzer.beep(1, 400, 100);
+                lengthBeeped = lengthNow;
+            }
+        }
+#else
         //-- show current position on display1 ---
         //sprintf(buf_tmp, "%06.1f cm", (float)lengthNow/10); //cm
         sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000); //m
-        //                123456789
         //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
         sprintf(buf_disp1, "%.9s", buf_tmp);
 
         //--- show target length on display2 ---
         //sprintf(buf_disp2, "%06.1f cm", (float)lengthTarget/10); //cm
         sprintf(buf_disp2, "S0LL%5.3f", (float)lengthTarget/1000); //m
-        //                  1234  5678
+        //                  123456789
+#endif
         
         //TODO: blink disp2 when set button pressed
         //TODO: blink disp2 when preset button pressed (exept manual mode)

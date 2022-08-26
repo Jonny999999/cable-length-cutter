@@ -56,9 +56,14 @@ extern "C" {
 #define ENABLE_HALF_STEPS false  // Set to true to enable tracking of rotary encoder at half step resolution
 #define FLIP_DIRECTION    false  // Set to true to reverse the clockwise/counterclockwise sense
 
-//#define MEASURING_ROLL_DIAMETER 44 //roll v2 glued
-#define MEASURING_ROLL_DIAMETER 86.6 //roll v3 large
-#define PI 3.14159265358979323846
+//--------------------------
+//------ calibration -------
+//--------------------------
+//use encoder test for calibration and calculate STEPS_PER_METER
+//#define ENCODER_TEST //show encoder count instead of converted meters
+#define STEPS_PER_METER 2127 //roll-v3-gummi-86.6mm - d=89.8mm
+//#define MEASURING_ROLL_DIAMETER 86.6 //roll v3 large
+//#define PI 3.14159265358979323846
 
 
 
