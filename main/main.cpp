@@ -25,7 +25,7 @@ void gpio_configure_output(gpio_num_t gpio_pin){
 }
 
 void init_gpios(){
-    //initialize all outputs
+    //--- outputs ---
     //4x stepper mosfets
     gpio_configure_output(GPIO_VFD_FWD);
     gpio_configure_output(GPIO_VFD_D0);
@@ -40,9 +40,15 @@ void init_gpios(){
     //5v regulator
     gpio_configure_output(GPIO_NUM_17);
 
+    //--- inputs ---
     //initialize and configure ADC
     adc1_config_width(ADC_WIDTH_BIT_12); //=> max resolution 4096
     adc1_config_channel_atten(ADC_CHANNEL_POTI, ADC_ATTEN_DB_11); //max voltage
+    //initialize input for cutter position switch with pullup
+    gpio_pad_select_gpio(GPIO_CUTTER_POS_SW);
+    gpio_set_direction(GPIO_CUTTER_POS_SW, GPIO_MODE_INPUT);
+    gpio_pad_select_gpio(GPIO_CUTTER_POS_SW);
+    gpio_set_pull_mode(GPIO_CUTTER_POS_SW, GPIO_PULLUP_ONLY);
 
 }
 

@@ -21,6 +21,7 @@ extern "C"
 #include "buzzer.hpp"
 #include "vfd.hpp"
 #include "display.hpp"
+#include "cutter.hpp"
 
 
 

@@ -181,6 +181,11 @@ void task_control(void *pvParameter)
         SW_PRESET3.handle();
 
 
+        //---------------------------
+        //------ handle cutter ------
+        //---------------------------
+        cutter_handle();
+
 
         //----------------------------
         //------ rotary encoder ------
@@ -202,6 +207,11 @@ void task_control(void *pvParameter)
             rotary_encoder_reset(&encoder);
             lengthNow = 0;
             buzzer.beep(1, 700, 100);
+
+            //######### TESTING #########
+            //stop cutter 
+            cutter_stop();
+            //######### TESTING #########
         }
        
 
@@ -266,6 +276,11 @@ void task_control(void *pvParameter)
                 lengthTarget = 10000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
+
+                //######### TESTING #########
+                //stop cutter 
+                cutter_start();
+                //######### TESTING #########
             }
         }
 

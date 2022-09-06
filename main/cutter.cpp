@@ -15,7 +15,7 @@ bool checkTimeout();
 //---------------------------
 //----- local variables -----
 //---------------------------
-cutter_state_t state = cutter_state_t::IDLE;
+cutter_state_t cutter_state = cutter_state_t::IDLE;
 uint32_t timestamp_turnedOn;
 uint32_t msTimeout = 3000;
 static const char *TAG = "cutter"; //tag for logging
@@ -47,7 +47,7 @@ void cutter_stop(){
 //===== cutter_getState =====
 //===========================
 cutter_state_t cutter_getState(){
-    return state;
+    return cutter_state;
 }
 
 
@@ -58,16 +58,16 @@ cutter_state_t cutter_getState(){
 //local function for changing state, taking corresponding actions and sending log output
 void setState(cutter_state_t stateNew){
     //only proceed and send log output when state or direction actually changed
-    if ( state == stateNew) {
+    if ( cutter_state == stateNew) {
         //already at target state -> do nothing
         return;
     }
 
     //log old and new state
-    ESP_LOGI(TAG, "CHANGING state from: %i %s", (int)state, cutter_stateStr[(int)state]);
-    ESP_LOGI(TAG, "CHANGING state   to: %i %s", (int)stateNew, cutter_stateStr[(int)stateNew]);
+    ESP_LOGI(TAG, "CHANGING state from: %s",cutter_stateStr[(int)cutter_state]);
+    ESP_LOGI(TAG, "CHANGING state   to: %s",cutter_stateStr[(int)stateNew]);
     //update stored state
-    state = stateNew;
+    cutter_state = stateNew;
 
     switch(stateNew){
         case cutter_state_t::IDLE:
@@ -111,7 +111,7 @@ bool checkTimeout(){
 //function that handles the cutter logic -> has to be run repeatedly
 void cutter_handle(){
 
-    switch(state){
+    switch(cutter_state){
         case cutter_state_t::IDLE:
         case cutter_state_t::TIMEOUT:
         case cutter_state_t::CANCELED:
