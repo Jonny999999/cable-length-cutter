@@ -38,11 +38,9 @@ void vfd_setState(bool stateNew, vfd_direction_t directionNew){
                 gpio_set_level(GPIO_VFD_REV, 1);
                 break;
         }
-        gpio_set_level(GPIO_RELAY, 1);
     } else {
         gpio_set_level(GPIO_VFD_FWD, 0);
         gpio_set_level(GPIO_VFD_REV, 0);
-        gpio_set_level(GPIO_RELAY, 0);
     }
 }
 
