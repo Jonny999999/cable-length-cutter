@@ -44,11 +44,11 @@ void init_gpios(){
     //initialize and configure ADC
     adc1_config_width(ADC_WIDTH_BIT_12); //=> max resolution 4096
     adc1_config_channel_atten(ADC_CHANNEL_POTI, ADC_ATTEN_DB_11); //max voltage
-    //initialize input for cutter position switch with pullup
-    gpio_pad_select_gpio(GPIO_CUTTER_POS_SW);
-    gpio_set_direction(GPIO_CUTTER_POS_SW, GPIO_MODE_INPUT);
-    gpio_pad_select_gpio(GPIO_CUTTER_POS_SW);
-    gpio_set_pull_mode(GPIO_CUTTER_POS_SW, GPIO_PULLUP_ONLY);
+    ////initialize input for cutter position switch with pullup (now done via evaluatedSwitch construcor)
+    //gpio_pad_select_gpio(GPIO_CUTTER_POS_SW);
+    //gpio_set_direction(GPIO_CUTTER_POS_SW, GPIO_MODE_INPUT);
+    //gpio_pad_select_gpio(GPIO_CUTTER_POS_SW);
+    //gpio_set_pull_mode(GPIO_CUTTER_POS_SW, GPIO_PULLUP_ONLY);
 
 }
 
