@@ -28,7 +28,7 @@ extern "C" {
 #define GPIO_SW_RESET GPIO_NUM_25
 #define GPIO_SW_SET GPIO_NUM_33
 #define GPIO_SW_PRESET1 GPIO_NUM_32
-#define GPIO_SW_PRESET2 GPIO_NUM_34
+#define GPIO_SW_PRESET2 GPIO_NUM_32 //gpio 34 currently used fir testing switches-analog
 #define GPIO_SW_PRESET3 GPIO_NUM_39
 
 #define GPIO_POTI GPIO_NUM_36
