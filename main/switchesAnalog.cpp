@@ -4,29 +4,6 @@
 
 
 
-//=============================
-//========= readAdc ===========
-//=============================
-//TODO add this to gpio library - used multiple times in this project
-//function for multisampling an anlog input
-int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
-    //make multiple measurements
-    int adc_reading = 0;
-    for (int i = 0; i < 16; i++) {
-        adc_reading += adc1_get_raw(adc_channel);
-    }
-    adc_reading = adc_reading / 16;
-    //return original or inverted result
-    if (inverted) {
-        return 4095 - adc_reading;
-    } else {
-        return adc_reading;
-    }
-}
-
-
-
-
 
 //=====================
 //===== Variables =====
@@ -66,7 +43,7 @@ const int lookup_voltages[] = {
 //handle demuxing of 4 switches from 1 adc (has to be run repeatedly)
 void handle(){
     //read current voltage
-    adcValue = readAdc(ADC_CHANNEL_BUTTONS);
+    adcValue = gpio_readAdc(ADC_CHANNEL_4SW_TO_ANALOG);
     ESP_LOGI(TAG, "voltage read: %d", adcValue);
 
     //find closest match in lookup table
