@@ -80,6 +80,7 @@ extern "C" void app_main()
     //define loglevel
     esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("buzzer", ESP_LOG_ERROR);
+    esp_log_level_set("switches-analog", ESP_LOG_WARN);
     esp_log_level_set("control", ESP_LOG_INFO);
 
     //create task for controlling the machine
