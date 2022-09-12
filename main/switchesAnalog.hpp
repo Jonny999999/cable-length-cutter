@@ -16,5 +16,10 @@ extern "C"
 #define ADC_CHANNEL_BUTTONS ADC1_CHANNEL_6 //gpio 34
 
 
+//get current state of certain switch
+bool switchesAnalog_getState(int swNumber);
 
-void switchesAnalog_handle();
+bool switchesAnalog_getState_sw0();
+bool switchesAnalog_getState_sw1();
+bool switchesAnalog_getState_sw2();
+bool switchesAnalog_getState_sw3();

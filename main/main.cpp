@@ -91,7 +91,8 @@ extern "C" void app_main()
     buzzer.beep(3, 70, 50);
 
     while(1){
-        switchesAnalog_handle();
         vTaskDelay(500 / portTICK_PERIOD_MS);
+
+        switchesAnalog_getState(0);
     }
 }

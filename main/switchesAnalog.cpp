@@ -63,12 +63,14 @@ const int lookup_voltages[] = {
 //===========================
 //===== handle function =====
 //===========================
-void switchesAnalog_handle(){
+//handle demuxing of 4 switches from 1 adc (has to be run repeatedly)
+void handle(){
     //read current voltage
     adcValue = readAdc(ADC_CHANNEL_BUTTONS);
     ESP_LOGI(TAG, "voltage read: %d", adcValue);
 
     //find closest match in lookup table
+    diffMin = 4095; //reset diffMin each run
     for (int i=0; i<16; i++){
         int diff = fabs(adcValue - lookup_voltages[i]);
         if (diff < diffMin){
@@ -95,3 +97,30 @@ void switchesAnalog_handle(){
 
 }
 
+
+
+//====================
+//===== getState =====
+//====================
+//get state of certain switch (0-3)
+bool switchesAnalog_getState(int swNumber){
+    //run handle function to obtain all current input states
+    handle();
+    //get relevant bit
+    bool state = CHECK_BIT(match_index, swNumber);
+    ESP_LOGI(TAG, "returned state of switch No. %d = %i", swNumber, (int)state);
+    return state;
+}
+
+bool switchesAnalog_getState_sw0(){
+    return switchesAnalog_getState(0);
+}
+bool switchesAnalog_getState_sw1(){
+    return switchesAnalog_getState(1);
+}
+bool switchesAnalog_getState_sw2(){
+    return switchesAnalog_getState(2);
+}
+bool switchesAnalog_getState_sw3(){
+    return switchesAnalog_getState(3);
+}
