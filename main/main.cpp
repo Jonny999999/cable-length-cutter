@@ -82,21 +82,12 @@ extern "C" void app_main()
     esp_log_level_set("buzzer", ESP_LOG_ERROR);
     esp_log_level_set("control", ESP_LOG_INFO);
 
-//    //create task for controlling the machine
-//    xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
-//    //create task for handling the buzzer
-//    xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);
+    //create task for controlling the machine
+    xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+    //create task for handling the buzzer
+    xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);
 
     //beep at startup
     buzzer.beep(3, 70, 50);
 
-    while(1){
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        SW_ADC34_0.handle();
-
-        switchesAnalog_getState(0);
-        if (SW_ADC34_0.risingEdge){
-            printf("rising edge detected\n");
-        }
-    }
 }
