@@ -92,7 +92,11 @@ extern "C" void app_main()
 
     while(1){
         vTaskDelay(500 / portTICK_PERIOD_MS);
+        SW_ADC34_0.handle();
 
         switchesAnalog_getState(0);
+        if (SW_ADC34_0.risingEdge){
+            printf("rising edge detected\n");
+        }
     }
 }

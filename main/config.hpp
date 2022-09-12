@@ -4,6 +4,7 @@ extern "C" {
 }
 #include "gpio_evaluateSwitch.hpp"
 #include "buzzer.hpp"
+#include "switchesAnalog.hpp"
 
 
 //===================================
@@ -79,6 +80,10 @@ extern gpio_evaluatedSwitch SW_SET;
 extern gpio_evaluatedSwitch SW_PRESET1;
 extern gpio_evaluatedSwitch SW_PRESET2;
 extern gpio_evaluatedSwitch SW_PRESET3;
+
+
+
+extern gpio_evaluatedSwitch SW_ADC34_0;
 
 //create global buzzer object
 extern buzzer_t buzzer;

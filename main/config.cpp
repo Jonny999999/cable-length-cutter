@@ -10,6 +10,8 @@ gpio_evaluatedSwitch SW_PRESET1(GPIO_SW_PRESET1, true, false); //pullup true, no
 gpio_evaluatedSwitch SW_PRESET2(GPIO_SW_PRESET2, false, true); //pullup false, INVERTED (switch to 3V3, pulldown on pcb soldered)
 gpio_evaluatedSwitch SW_PRESET3(GPIO_SW_PRESET3, false, true); //pullup false, INVERTED (switch to 3V3, pulldown on pcb soldered)
 
+//evaluated switch with function to obtain the current input state instead of gpio
+gpio_evaluatedSwitch SW_ADC34_0 (&switchesAnalog_getState_sw0);
 
 //create buzzer object with no gap between beep events
 buzzer_t buzzer(GPIO_BUZZER, 0);
