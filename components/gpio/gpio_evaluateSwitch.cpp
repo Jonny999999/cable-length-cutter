@@ -9,10 +9,10 @@ gpio_evaluatedSwitch::gpio_evaluatedSwitch( //minimal (use default values)
     gpio_num = gpio_num_declare;
     pullup = true;
     inverted = false;
+    inputSource = inputSource_t::GPIO;
 
-    init();
+    initGpio();
 };
-
 
 
 gpio_evaluatedSwitch::gpio_evaluatedSwitch( //optional parameters given
@@ -23,13 +23,25 @@ gpio_evaluatedSwitch::gpio_evaluatedSwitch( //optional parameters given
     gpio_num = gpio_num_declare;
     pullup = pullup_declare;
     inverted = inverted_declare;
+    inputSource = inputSource_t::GPIO;
 
-    init();
+    initGpio();
+};
+
+
+gpio_evaluatedSwitch::gpio_evaluatedSwitch( //with function as input source
+        bool (*getInputStatePtr_f)(void),
+        bool inverted_f){
+    //gpio_num = NULL;
+    //pullup = NULL;
+    inverted = inverted_f;
+    getInputStatePtr = getInputStatePtr_f;
+    inputSource = inputSource_t::FUNCTION;
 };
 
 
 
-void gpio_evaluatedSwitch::init(){
+void gpio_evaluatedSwitch::initGpio(){
     ESP_LOGI(TAG, "initializing gpio pin %d", (int)gpio_num);
 
     //define gpio pin as input
@@ -48,122 +60,85 @@ void gpio_evaluatedSwitch::init(){
 };
 
 
+
 void gpio_evaluatedSwitch::handle(){  //Statemachine for debouncing and edge detection
+
+    //--- get pin state with required method ---
+    switch (inputSource){
+        case inputSource_t::GPIO: //from gpio pin
+            if (gpio_get_level(gpio_num) == 0){ //pin low
+                inputState = true;
+            } else { //pin high
+                inputState = false;
+            }
+            break;
+        case inputSource_t::FUNCTION: //from funtion
+            inputState = (*getInputStatePtr)();
+            break;
+    }
+
+    //--- invert state ---
+    //not inverted: switch switches to GND when active
+    //inverted: switch switched to VCC when active
     if (inverted == true){
-        //=========================================================
-        //=========== Statemachine for inverted switch ============
-        //=================== (switch to VCC) =====================
-        //=========================================================
-        switch (p_state){
-            default:
-                p_state = switchState::FALSE;
-                break;
+        inputState = !inputState;
+    }
 
-            case switchState::FALSE:  //input confirmed high (released)
-                fallingEdge = false; //reset edge event
-                if (gpio_get_level(gpio_num) == 1){ //pin high (on)
-                    p_state = switchState::HIGH;
-                    timestampHigh = esp_log_timestamp(); //save timestamp switched from low to high
-                } else {
-                    msReleased = esp_log_timestamp() - timestampLow; //update duration released
-                }
-                break;
 
-            case switchState::HIGH: //input recently switched to high (pressed)
-                if (gpio_get_level(gpio_num) == 1){ //pin still high (on)
-                    if (esp_log_timestamp() - timestampHigh > minOnMs){ //pin in same state long enough
-                        p_state = switchState::TRUE;
-                        state = true;
-                        risingEdge = true;
-                        msReleased = timestampHigh - timestampLow; //calculate duration the button was released 
-                    }
-                }else{
-                    p_state = switchState::FALSE;
-                }
-                break;
+    //=========================================================
+    //========= Statemachine for evaluateing switch ===========
+    //=========================================================
+    switch (p_state){
+        default:
+            p_state = switchState::FALSE;
+            break;
 
-            case switchState::TRUE:  //input confirmed high (pressed)
-                risingEdge = false; //reset edge event
-                if (gpio_get_level(gpio_num) == 0){ //pin low (off)
-                    timestampLow = esp_log_timestamp();
-                    p_state = switchState::LOW;
-                } else {
-                    msPressed = esp_log_timestamp() - timestampHigh; //update duration pressed
-                }
+        case switchState::FALSE:  //input confirmed high (released)
+            fallingEdge = false; //reset edge event
+            if (inputState == true){ //pin high (on)
+                p_state = switchState::HIGH;
+                timestampHigh = esp_log_timestamp(); //save timestamp switched from low to high
+            } else {
+                msReleased = esp_log_timestamp() - timestampLow; //update duration released
+            }
+            break;
 
-                break;
-
-            case switchState::LOW: //input recently switched to low (released)
-                if (gpio_get_level(gpio_num) == 0){ //pin still low (off)
-                    if (esp_log_timestamp() - timestampLow > minOffMs){ //pin in same state long enough
-                        p_state = switchState::FALSE;
-                        msPressed = timestampLow - timestampHigh; //calculate duration the button was pressed
-                        state=false;
-                        fallingEdge=true;
-                    }
-                }else{
+        case switchState::HIGH: //input recently switched to high (pressed)
+            if (inputState == true){ //pin still high (on)
+                if (esp_log_timestamp() - timestampHigh > minOnMs){ //pin in same state long enough
                     p_state = switchState::TRUE;
+                    state = true;
+                    risingEdge = true;
+                    msReleased = timestampHigh - timestampLow; //calculate duration the button was released 
                 }
-                break;
-        }
-
-    }else{
-        //=========================================================
-        //========= Statemachine for not inverted switch ==========
-        //=================== (switch to GND) =====================
-        //=========================================================
-        switch (p_state){
-            default:
+            }else{
                 p_state = switchState::FALSE;
-                break;
+            }
+            break;
 
-            case switchState::FALSE:  //input confirmed high (released)
-                fallingEdge = false; //reset edge event
-                if (gpio_get_level(gpio_num) == 0){ //pin low (on)
-                    p_state = switchState::LOW;
-                    timestampLow = esp_log_timestamp(); //save timestamp switched from high to low
-                } else {
-                    msReleased = esp_log_timestamp() - timestampHigh; //update duration released
-                }
-                break;
+        case switchState::TRUE:  //input confirmed high (pressed)
+            risingEdge = false; //reset edge event
+            if (inputState == false){ //pin low (off)
+                timestampLow = esp_log_timestamp();
+                p_state = switchState::LOW;
+            } else {
+                msPressed = esp_log_timestamp() - timestampHigh; //update duration pressed
+            }
 
-            case switchState::LOW: //input recently switched to low (pressed)
-                if (gpio_get_level(gpio_num) == 0){ //pin still low (on)
-                    if (esp_log_timestamp() - timestampLow > minOnMs){ //pin in same state long enough
-                        p_state = switchState::TRUE;
-                        state = true;
-                        risingEdge = true;
-                        msReleased = timestampLow - timestampHigh; //calculate duration the button was released
-                    }
-                }else{
+            break;
+
+        case switchState::LOW: //input recently switched to low (released)
+            if (inputState == false){ //pin still low (off)
+                if (esp_log_timestamp() - timestampLow > minOffMs){ //pin in same state long enough
                     p_state = switchState::FALSE;
+                    msPressed = timestampLow - timestampHigh; //calculate duration the button was pressed
+                    state=false;
+                    fallingEdge=true;
                 }
-                break;
-
-            case switchState::TRUE:  //input confirmed low (pressed)
-                risingEdge = false; //reset edge event
-                if (gpio_get_level(gpio_num) == 1){ //pin high (off)
-                    timestampHigh = esp_log_timestamp();
-                    p_state = switchState::HIGH;
-                } else {
-                    msPressed = esp_log_timestamp() - timestampLow; //update duration pressed
-                }
-
-                break;
-
-            case switchState::HIGH: //input recently switched to high (released)
-                if (gpio_get_level(gpio_num) == 1){ //pin still high (off)
-                    if (esp_log_timestamp() - timestampHigh > minOffMs){ //pin in same state long enough
-                        p_state = switchState::FALSE;
-                        msPressed = timestampHigh - timestampLow; //calculate duration the button was pressed
-                        state=false;
-                        fallingEdge=true;
-                    }
-                }else{
-                    p_state = switchState::TRUE;
-                }
-                break;
-        }
+            }else{
+                p_state = switchState::TRUE;
+            }
+            break;
     }
 
 }
