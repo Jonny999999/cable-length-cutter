@@ -18,6 +18,7 @@ extern "C"
 
 #include "config.hpp"
 #include "gpio_evaluateSwitch.hpp"
+#include "gpio_adc.hpp"
 #include "buzzer.hpp"
 #include "vfd.hpp"
 #include "display.hpp"

@@ -19,7 +19,6 @@ cutter_state_t cutter_state = cutter_state_t::IDLE;
 uint32_t timestamp_turnedOn;
 uint32_t msTimeout = 3000;
 static const char *TAG = "cutter"; //tag for logging
-gpio_evaluatedSwitch POSITION_SW(GPIO_CUTTER_POS_SW, true, false); //pullup true, not inverted (switch to GND, internal pullup used)
 
 
 
@@ -39,7 +38,7 @@ void cutter_start(){
 //========= stop =========
 //========================
 void cutter_stop(){
-    if(cutter_state =! cutter_state_t::IDLE){
+    if(cutter_state != cutter_state_t::IDLE){
         setState(cutter_state_t::CANCELED);
     }
     //starts motor on state change
@@ -115,10 +114,10 @@ bool checkTimeout(){
 //function that handles the cutter logic -> has to be run repeatedly
 void cutter_handle(){
     //handle evaluated switch (position switch)
-    POSITION_SW.handle();
+    SW_CUTTER_POS.handle();
     //TODO add custom thresholds once at initialization?
-    //POSITION_SW.minOnMs = 10;
-    //POSITION_SW.minOffMs = 10;
+    //SW_CUTTER_POS.minOnMs = 10;
+    //SW_CUTTER_POS.minOffMs = 10;
 
 
     switch(cutter_state){
@@ -131,7 +130,7 @@ void cutter_handle(){
         case cutter_state_t::START:
             //--- moved away from idle position ---
             //if (gpio_get_level(GPIO_CUTTER_POS_SW) == 0){ //contact closed
-            if (POSITION_SW.state == true) { //contact closed -> not at idle pos
+            if (SW_CUTTER_POS.state == true) { //contact closed -> not at idle pos
                 setState(cutter_state_t::CUTTING);
             }
             //--- timeout ---
@@ -145,7 +144,7 @@ void cutter_handle(){
             //--- idle position reached ---
             //if (gpio_get_level(GPIO_CUTTER_POS_SW) == 1){ //contact not closed
             //TODO: add min on duration
-            if (POSITION_SW.state == false) { //contact open -> at idle pos
+            if (SW_CUTTER_POS.state == false) { //contact open -> at idle pos
                 setState(cutter_state_t::IDLE);
             }
             //--- timeout ---

@@ -7,6 +7,7 @@ idf_component_register(
         "vfd.cpp"
         "display.cpp"
         "cutter.cpp"
+        "switchesAnalog.cpp"
     INCLUDE_DIRS 
         "."
     )

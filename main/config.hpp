@@ -4,6 +4,7 @@ extern "C" {
 }
 #include "gpio_evaluateSwitch.hpp"
 #include "buzzer.hpp"
+#include "switchesAnalog.hpp"
 
 
 //===================================
@@ -22,18 +23,35 @@ extern "C" {
 
 
 //==================================
-//===== define input gpio pins =====
+//==== define analog input pins ====
 //==================================
-#define GPIO_SW_START GPIO_NUM_26
-#define GPIO_SW_RESET GPIO_NUM_25
-#define GPIO_SW_SET GPIO_NUM_33
-#define GPIO_SW_PRESET1 GPIO_NUM_32
-#define GPIO_SW_PRESET2 GPIO_NUM_34
-#define GPIO_SW_PRESET3 GPIO_NUM_39
-
-#define GPIO_CUTTER_POS_SW GPIO_NUM_14
 #define GPIO_POTI GPIO_NUM_36
 #define ADC_CHANNEL_POTI ADC1_CHANNEL_0
+#define GPIO_4SW_TO_ANALOG GPIO_NUM_39
+#define ADC_CHANNEL_4SW_TO_ANALOG ADC1_CHANNEL_3 //gpio 39
+//ADC1_CHANNEL_0 gpio36
+//ADC1_CHANNEL_6 gpio_34
+//ADC1_CHANNEL_3 gpio_39
+
+
+//=====================================
+//==== assign switches to objects =====
+//=====================================
+//see config.cpp for available evaluated switch objects
+#define SW_START sw_gpio_26
+#define SW_RESET sw_gpio_25
+#define SW_CUTTER_POS sw_gpio_14
+#define SW_SET     sw_gpio_analog_0
+#define SW_PRESET1 sw_gpio_analog_1
+#define SW_PRESET2 sw_gpio_analog_2
+#define SW_PRESET3 sw_gpio_analog_3
+
+//unused but already available evaluated inputs
+//#define ? sw_gpio_33
+//#define ? sw_gpio_32
+//#define ? sw_gpio_34
+
+
 
 
 //--------------------------
@@ -72,14 +90,22 @@ extern "C" {
 //===== global variables =====
 //============================
 //create global evaluated switch objects
-//--- inputs ---
-//create objects for switches at bottom screw temerinals
-extern gpio_evaluatedSwitch SW_START;
-extern gpio_evaluatedSwitch SW_RESET;
-extern gpio_evaluatedSwitch SW_SET;
-extern gpio_evaluatedSwitch SW_PRESET1;
-extern gpio_evaluatedSwitch SW_PRESET2;
-extern gpio_evaluatedSwitch SW_PRESET3;
+//--- switches on digital gpio pins ---
+//extern gpio_evaluatedSwitch sw_gpio_39;
+extern gpio_evaluatedSwitch sw_gpio_34;
+extern gpio_evaluatedSwitch sw_gpio_32;
+extern gpio_evaluatedSwitch sw_gpio_33;
+extern gpio_evaluatedSwitch sw_gpio_25;
+extern gpio_evaluatedSwitch sw_gpio_26;
+extern gpio_evaluatedSwitch sw_gpio_14;
+
+//--- switches connected to 4-sw-to-analog stripboard ---
+extern gpio_evaluatedSwitch sw_gpio_analog_0;
+extern gpio_evaluatedSwitch sw_gpio_analog_1;
+extern gpio_evaluatedSwitch sw_gpio_analog_2;
+extern gpio_evaluatedSwitch sw_gpio_analog_3;
+
+
 
 //create global buzzer object
 extern buzzer_t buzzer;

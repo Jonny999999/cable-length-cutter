@@ -23,27 +23,6 @@ QueueHandle_t init_encoder(rotary_encoder_info_t * info){
 }
 
 
-//=============================
-//========= readAdc ===========
-//=============================
-//function for multisampling an anlog input
-int readAdc(adc1_channel_t adc_channel, bool inverted = false) {
-    //make multiple measurements
-    int adc_reading = 0;
-    for (int i = 0; i < 16; i++) {
-        adc_reading += adc1_get_raw(adc_channel);
-    }
-    adc_reading = adc_reading / 16;
-    //return original or inverted result
-    if (inverted) {
-        return 4095 - adc_reading;
-    } else {
-        return adc_reading;
-    }
-}
-
-
-
 
 
 //====================
@@ -228,7 +207,7 @@ void task_control(void *pvParameter)
         //set target length to poti position when SET switch is pressed
         if (SW_SET.state == true) {
             //read adc
-            potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
+            potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
             int lengthTargetNew = (float)potiRead / 4095 * 30000;
             //apply hysteresis and round to whole meters //TODO optimize this
@@ -341,7 +320,7 @@ void task_control(void *pvParameter)
 
             case MANUAL: //manually control motor via preset buttons + poti
                 //read poti value
-                potiRead = readAdc(ADC_CHANNEL_POTI); //0-4095
+                potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
                 //scale poti to speed levels 0-3
                 uint8_t level = round( (float)potiRead / 4095 * 3 );
                 //exit manual mode if preset2 released
