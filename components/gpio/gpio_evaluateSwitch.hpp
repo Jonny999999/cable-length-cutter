@@ -18,20 +18,29 @@ extern "C"
 //switch to VCC (inverted) and dont use internal pullup:
 //gpio_evaluatedSwitch s3(GPIO_NUM_14 false, true);
 
+enum class inputSource_t {GPIO, FUNCTION};
 
 class gpio_evaluatedSwitch {
     public:
         //--- input ---
         uint32_t minOnMs = 30;
         uint32_t minOffMs = 30;
-        gpio_evaluatedSwitch( //constructor minimal (default parameters pullup=true, inverted=false)
+
+        //constructor minimal (default parameters pullup=true, inverted=false)
+        gpio_evaluatedSwitch( 
                 gpio_num_t gpio_num_declare
                 );
-        gpio_evaluatedSwitch( //constructor with optional parameters
+
+        //constructor with optional parameters
+        gpio_evaluatedSwitch(
                 gpio_num_t gpio_num_declare,
                 bool pullup_declare,
                 bool inverted_declare=false
                 );
+
+        //constructor  with a function as source for input state instead of a gpio pin
+        gpio_evaluatedSwitch(bool (*getInputStatePtr_f)(void), bool inverted_f=false); 
+
 
         //--- output ---         TODO make readonly? (e.g. public section: const int& x = m_x;)
         bool state = false;
@@ -47,12 +56,15 @@ class gpio_evaluatedSwitch {
         gpio_num_t gpio_num;
         bool pullup;
         bool inverted;
+        bool (*getInputStatePtr)(void); //pointer to function for getting current input state
+        inputSource_t inputSource = inputSource_t::GPIO;
 
         enum class switchState {TRUE, FALSE, LOW, HIGH};
         switchState p_state = switchState::FALSE;
+        bool inputState = false;
         uint32_t timestampLow = 0;
         uint32_t timestampHigh = 0;
-        void init();
+        void initGpio();
 
 };
 
