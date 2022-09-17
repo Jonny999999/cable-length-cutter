@@ -28,5 +28,8 @@ void cutter_stop();
 cutter_state_t cutter_getState();
 //TODO: bool cutter_isOn() (simply return boolean instead of enum)
 
+//check if cutter is currently operating
+bool cutter_isRunning();
+
 //handle function - has to be run repeatedly
 void cutter_handle();

@@ -55,6 +55,20 @@ cutter_state_t cutter_getState(){
 
 
 
+//============================
+//===== cutter_isRunning =====
+//============================
+bool cutter_isRunning(){
+    if (cutter_state == cutter_state_t::START 
+            || cutter_state == cutter_state_t::CUTTING) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+
 //---------------------------
 //-------- setState ---------
 //---------------------------

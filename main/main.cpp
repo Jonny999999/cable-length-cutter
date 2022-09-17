@@ -32,10 +32,11 @@ void init_gpios(){
     gpio_configure_output(GPIO_VFD_FWD);
     gpio_configure_output(GPIO_VFD_D0);
     gpio_configure_output(GPIO_VFD_D1);
+    gpio_configure_output(GPIO_VFD_REV);
     //gpio_configure_output(GPIO_VFD_D2); only used with 7.5kw vfd
     //2x power mosfets
-    gpio_configure_output(GPIO_VFD_REV);
-    gpio_configure_output(GPIO_MOS2);
+    gpio_configure_output(GPIO_MOS1); //mos1
+    gpio_configure_output(GPIO_LAMP); //lamp
     //onboard relay and buzzer
     gpio_configure_output(GPIO_RELAY);
     gpio_configure_output(GPIO_BUZZER);
