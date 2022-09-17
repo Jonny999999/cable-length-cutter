@@ -158,6 +158,8 @@ void task_control(void *pvParameter)
         SW_PRESET1.handle();
         SW_PRESET2.handle();
         SW_PRESET3.handle();
+        SW_CUT.handle();
+        SW_AUTO_CUT.handle();
 
 
         //---------------------------

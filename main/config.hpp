@@ -45,10 +45,10 @@ extern "C" {
 #define SW_PRESET1 sw_gpio_analog_1
 #define SW_PRESET2 sw_gpio_analog_2
 #define SW_PRESET3 sw_gpio_analog_3
+#define SW_CUT sw_gpio_33
+#define SW_AUTO_CUT sw_gpio_32
 
 //unused but already available evaluated inputs
-//#define ? sw_gpio_33
-//#define ? sw_gpio_32
 //#define ? sw_gpio_34
 
 
