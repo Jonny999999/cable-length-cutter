@@ -109,7 +109,7 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
 void setDynSpeedLvl(uint8_t lvlMax = 3){
     uint8_t lvl;
     //define speed level according to difference
-    if (lengthRemaining < 50) {
+    if (lengthRemaining < 20) {
         lvl = 0;
     } else if (lengthRemaining < 200) {
         lvl = 1;
@@ -307,7 +307,7 @@ void task_control(void *pvParameter)
             case systemState_t::WINDING_START: //wind slow for certain time
                 //set vfd speed depending on remaining distance 
                 setDynSpeedLvl(1); //limit to speed lvl 1 (force slow start)
-                if (esp_log_timestamp() - timestamp_motorStarted > 2000) {
+                if (esp_log_timestamp() - timestamp_motorStarted > 3000) {
                     changeState(systemState_t::WINDING);
                 }
                 handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
@@ -324,7 +324,7 @@ void task_control(void *pvParameter)
             case systemState_t::TARGET_REACHED:
                 vfd_setState(false);
                 //switch to counting state when no longer at or above target length
-                if ( lengthRemaining > 20 ) { //FIXME: require reset switch to be able to restart? or evaluate a tolerance here?
+                if ( lengthRemaining > 10 ) { //FIXME: require reset switch to be able to restart? or evaluate a tolerance here?
                     changeState(systemState_t::COUNTING);
                 }
                 //handle delayed cutting if automatic cut is enabled
@@ -332,7 +332,7 @@ void task_control(void *pvParameter)
                     cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
                     //- beep countdown -
                     //time passed since last beep  >  time remaining / 10
-                    if ( (esp_log_timestamp() - timestamp_cut_lastBeep)  > (cut_msRemaining / 10)
+                    if ( (esp_log_timestamp() - timestamp_cut_lastBeep)  > (cut_msRemaining / 6)
                             && (esp_log_timestamp() - timestamp_cut_lastBeep) > 50 ){ //dont trigger beeps faster than beep time
                         buzzer.beep(1, 50, 0);
                         timestamp_cut_lastBeep = esp_log_timestamp();
@@ -444,7 +444,7 @@ void task_control(void *pvParameter)
         }
         //manual state: blink "manual"
         else if (controlState == systemState_t::MANUAL) {
-            displayBot.blinkStrings(" MANUAL ", buf_disp2, 1000, 1000);
+            displayBot.blinkStrings(" MANUAL ", buf_disp2, 400, 800);
         }
         //otherwise show target length
         else {
