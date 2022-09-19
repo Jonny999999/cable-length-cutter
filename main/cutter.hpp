@@ -1,3 +1,5 @@
+#pragma once
+
 extern "C"
 {
 #include <stdio.h>
@@ -11,7 +13,7 @@ extern "C"
 
 //--- variables ---
 //enum for state of cutter
-typedef enum cutter_state_t {IDLE, START, CUTTING, CANCELED, TIMEOUT} cutter_state_t;
+enum class cutter_state_t {IDLE, START, CUTTING, CANCELED, TIMEOUT};
 //string for logging the state name
 extern const char* cutter_stateStr[5];
 

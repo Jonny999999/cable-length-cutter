@@ -194,10 +194,20 @@ void task_control(void *pvParameter)
 
         
         //--- CUT switch ---
+        //start cut cycle immediately
         if (SW_CUT.risingEdge) {
             cutter_start();
+            buzzer.beep(1, 70, 50);
         }
        
+
+        //--- beep at AUTO_CUT toggle ---
+        if (SW_AUTO_CUT.risingEdge){
+            buzzer.beep(2, 100, 50);
+        } else if (SW_AUTO_CUT.fallingEdge) {
+            buzzer.beep(1, 400, 50);
+        }
+
 
         //--- manual mode ---
         //switch to manual motor control (2 buttons + poti)
