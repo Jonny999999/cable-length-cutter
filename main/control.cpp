@@ -208,8 +208,21 @@ void task_control(void *pvParameter)
         //--- CUT switch ---
         //start cut cycle immediately
         if (SW_CUT.risingEdge) {
-            cutter_start();
-            buzzer.beep(1, 70, 50);
+            //stop cutter if already running
+            if (cutter_isRunning()) {
+                cutter_stop();
+                buzzer.beep(1, 600, 0);
+            }
+            //start cutter when motor not active
+            else if (controlState != systemState_t::WINDING_START //TODO use vfd state here?
+                    && controlState != systemState_t::WINDING) {
+                cutter_start();
+                buzzer.beep(1, 70, 50);
+            }
+            //error cant cut while motor is on
+            else {
+                buzzer.beep(6, 70, 50);
+            }
         }
        
 
