@@ -339,6 +339,7 @@ void task_control(void *pvParameter)
                     }
                     //- trigger cut if delay passed -
                     if (cut_msRemaining <= 0){
+                        cut_msRemaining = 0; //prevent negative number on display
                         cutter_start();
                         changeState(systemState_t::CUTTING);
                     }
@@ -424,12 +425,18 @@ void task_control(void *pvParameter)
         //--------------------------
         //run handle function
         displayTop.handle();
-        //show current position on display
-        sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
-        //                123456789
-        //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
-        sprintf(buf_disp1, "%.9s", buf_tmp);
-        displayTop.showString(buf_disp1);
+        //indicate upcoming cut when pending
+        if (controlState == systemState_t::TARGET_REACHED && SW_AUTO_CUT.state == true){
+            displayTop.blinkStrings(" CUT 1N ", "        ", 100, 30);
+        }
+        //otherwise show current position
+        else {
+            sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
+            //                123456789
+            //limit length to 8 digits + decimal point (drop decimal places when it does not fit)
+            sprintf(buf_disp1, "%.9s", buf_tmp);
+            displayTop.showString(buf_disp1);
+        }
 
 
         //--------------------------
@@ -438,13 +445,22 @@ void task_control(void *pvParameter)
         //run handle function
         displayBot.handle();
         //setting target length: blink target length
-        if (SW_SET.state == true){
+        if (SW_SET.state == true) {
             sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
             displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
         }
         //manual state: blink "manual"
         else if (controlState == systemState_t::MANUAL) {
             displayBot.blinkStrings(" MANUAL ", buf_disp2, 400, 800);
+        }
+        //notify that cutter is active
+        else if (cutter_isRunning()) {
+            displayBot.blinkStrings("CUTT1NG..", "CUTT1NG ", 100, 100);
+        }
+        //show ms countdown to cut when pending
+        else if (controlState == systemState_t::TARGET_REACHED && SW_AUTO_CUT.state == true) {
+            sprintf(buf_disp2, "  %03d   ", cut_msRemaining);
+            displayBot.showString(buf_disp2);
         }
         //otherwise show target length
         else {
