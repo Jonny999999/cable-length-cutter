@@ -32,6 +32,7 @@ static const char *TAG = "control"; //tag for logging
 
 const char* systemStateStr[6] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "CUTTING", "MANUAL"};
 systemState_t controlState = systemState_t::COUNTING;
+uint32_t timestamp_changedState = 0;
 
 char buf_disp[20]; //both displays
 char buf_disp1[10];// 8 digits + decimal point + \0
@@ -42,15 +43,19 @@ rotary_encoder_info_t encoder; //encoder device/info
 QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_state_t encoderState;
 
-uint32_t timestamp_pageSwitched = 0;
-bool page = false; //store page number currently displayed
 int lengthNow = 0; //length measured in mm
 int lengthTarget = 3000; //target length in mm
 int lengthRemaining = 0; //(target - now) length needed for reaching the target
 int potiRead = 0; //voltage read from adc
 uint32_t timestamp_motorStarted = 0; //timestamp winding started
                                      
+//encoder test / calibration
 int lengthBeeped = 0; //only beep once per meter during encoder test
+                      
+//automatic cut
+int cut_msRemaining = 0;
+uint32_t timestamp_cut_lastBeep = 0;
+uint32_t autoCut_delayMs = 3000; //TODO add this to config
 
 
 //===== change State =====
@@ -64,6 +69,8 @@ void changeState (systemState_t stateNew) {
     ESP_LOGW(TAG, "changed state from %s to %s", systemStateStr[(int)controlState], systemStateStr[(int)stateNew]);
     //change state
     controlState = stateNew;
+    //update timestamp
+    timestamp_changedState = esp_log_timestamp();
 }
                       
 
@@ -146,7 +153,7 @@ void task_control(void *pvParameter)
     //===== loop =====
     //================
     while(1){
-        vTaskDelay(20 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
 
         //-----------------------------
         //------ handle switches ------
@@ -320,10 +327,21 @@ void task_control(void *pvParameter)
                 if ( lengthRemaining > 20 ) { //FIXME: require reset switch to be able to restart? or evaluate a tolerance here?
                     changeState(systemState_t::COUNTING);
                 }
-                //start cutting if automatic cut is enabled
+                //handle delayed cutting if automatic cut is enabled
                 else if (SW_AUTO_CUT.state == true){
-                    cutter_start();
-                    changeState(systemState_t::CUTTING);
+                    cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
+                    //- beep countdown -
+                    //time passed since last beep  >  time remaining / 10
+                    if ( (esp_log_timestamp() - timestamp_cut_lastBeep)  > (cut_msRemaining / 10)
+                            && (esp_log_timestamp() - timestamp_cut_lastBeep) > 50 ){ //dont trigger beeps faster than beep time
+                        buzzer.beep(1, 50, 0);
+                        timestamp_cut_lastBeep = esp_log_timestamp();
+                    }
+                    //- trigger cut if delay passed -
+                    if (cut_msRemaining <= 0){
+                        cutter_start();
+                        changeState(systemState_t::CUTTING);
+                    }
                 }
                 //show msg when trying to start, but target is reached
                 if (SW_START.risingEdge){
