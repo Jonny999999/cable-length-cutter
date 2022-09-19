@@ -56,6 +56,8 @@ int lengthBeeped = 0; //only beep once per meter during encoder test
 int cut_msRemaining = 0;
 uint32_t timestamp_cut_lastBeep = 0;
 uint32_t autoCut_delayMs = 3000; //TODO add this to config
+bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
+bool autoCutWaiting = false; //currently waiting (for display)
 
 
 //===== change State =====
@@ -84,9 +86,12 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
     if (lengthRemaining <= 0 ) {
         changeState(systemState_t::TARGET_REACHED);
         vfd_setState(false);
-        displayTop->blink(1, 0, 1500, "  S0LL  ");
-        displayBot->blink(1, 0, 1500, "ERREICHT");
+        displayTop->blink(1, 0, 1000, "  S0LL  ");
+        displayBot->blink(1, 0, 1000, "ERREICHT");
         buzzer.beep(2, 100, 100);
+        //store current state once at change to TARGET_REACHED
+        //(prevent unwanted cut when enabling while already TARGET_REACHED state)
+        autoCutEnabled = SW_AUTO_CUT.state; 
         return true;
     }
     //start button released
@@ -326,9 +331,12 @@ void task_control(void *pvParameter)
                 //switch to counting state when no longer at or above target length
                 if ( lengthRemaining > 10 ) { //FIXME: require reset switch to be able to restart? or evaluate a tolerance here?
                     changeState(systemState_t::COUNTING);
+                    autoCutWaiting = false;
                 }
                 //handle delayed cutting if automatic cut is enabled
-                else if (SW_AUTO_CUT.state == true){
+                else if ( (autoCutEnabled == true)
+                        && (esp_log_timestamp() - timestamp_changedState > 300) ){ //wait for dislay msg "reached" to finish
+                    autoCutWaiting = true; //display countdown
                     cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
                     //- beep countdown -
                     //time passed since last beep  >  time remaining / 10
@@ -337,11 +345,17 @@ void task_control(void *pvParameter)
                         buzzer.beep(1, 50, 0);
                         timestamp_cut_lastBeep = esp_log_timestamp();
                     }
+                    //- cancel countdown with AUTO_CUT off -
+                    if (!SW_AUTO_CUT.state) { //note: stop button also works
+                        autoCutWaiting = false;
+                        autoCutEnabled = false;
+                    }
                     //- trigger cut if delay passed -
-                    if (cut_msRemaining <= 0){
+                    else if (cut_msRemaining <= 0){
                         cut_msRemaining = 0; //prevent negative number on display
                         cutter_start();
                         changeState(systemState_t::CUTTING);
+                        autoCutWaiting = false;
                     }
                 }
                 //show msg when trying to start, but target is reached
@@ -426,8 +440,8 @@ void task_control(void *pvParameter)
         //run handle function
         displayTop.handle();
         //indicate upcoming cut when pending
-        if (controlState == systemState_t::TARGET_REACHED && SW_AUTO_CUT.state == true){
-            displayTop.blinkStrings(" CUT 1N ", "        ", 100, 30);
+        if (autoCutWaiting == true){
+            displayTop.blinkStrings(" CUT 1N ", "        ", 70, 30);
         }
         //otherwise show current position
         else {
@@ -455,12 +469,13 @@ void task_control(void *pvParameter)
         }
         //notify that cutter is active
         else if (cutter_isRunning()) {
-            displayBot.blinkStrings("CUTT1NG..", "CUTT1NG ", 100, 100);
+            displayBot.blinkStrings("CUTTING]", "CUTTING[", 100, 100);
         }
         //show ms countdown to cut when pending
-        else if (controlState == systemState_t::TARGET_REACHED && SW_AUTO_CUT.state == true) {
-            sprintf(buf_disp2, "  %03d   ", cut_msRemaining);
-            displayBot.showString(buf_disp2);
+        else if (autoCutWaiting == true) {
+            sprintf(buf_disp2, "  %04d  ", cut_msRemaining);
+            //displayBot.showString(buf_disp2); //TODO:blink "erreicht" overrides this. for now using blink as workaround
+            displayBot.blinkStrings(buf_disp2, buf_disp2, 100, 100);
         }
         //otherwise show target length
         else {
