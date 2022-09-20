@@ -26,8 +26,8 @@ extern "C"
 
 
 
-enum class systemState_t {COUNTING, WINDING_START, WINDING, TARGET_REACHED, CUTTING, MANUAL};
-extern const char* systemStateStr[6];
+enum class systemState_t {COUNTING, WINDING_START, WINDING, TARGET_REACHED, AUTO_CUT_WAITING, CUTTING, MANUAL};
+extern const char* systemStateStr[7];
 
 
 void task_control(void *pvParameter);

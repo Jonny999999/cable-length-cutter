@@ -30,7 +30,7 @@ QueueHandle_t init_encoder(rotary_encoder_info_t * info){
 //====================
 static const char *TAG = "control"; //tag for logging
 
-const char* systemStateStr[6] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "CUTTING", "MANUAL"};
+const char* systemStateStr[7] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "AUTO_CUT_WAITING", "CUTTING", "MANUAL"};
 systemState_t controlState = systemState_t::COUNTING;
 uint32_t timestamp_changedState = 0;
 
@@ -57,7 +57,6 @@ int cut_msRemaining = 0;
 uint32_t timestamp_cut_lastBeep = 0;
 uint32_t autoCut_delayMs = 3000; //TODO add this to config
 bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
-bool autoCutWaiting = false; //currently waiting (for display)
 
 
 //===== change State =====
@@ -89,9 +88,6 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
         displayTop->blink(1, 0, 1000, "  S0LL  ");
         displayBot->blink(1, 0, 1000, "ERREICHT");
         buzzer.beep(2, 100, 100);
-        //store current state once at change to TARGET_REACHED
-        //(prevent unwanted cut when enabling while already TARGET_REACHED state)
-        autoCutEnabled = SW_AUTO_CUT.state; 
         return true;
     }
     //start button released
@@ -226,11 +222,23 @@ void task_control(void *pvParameter)
         }
        
 
-        //--- beep at AUTO_CUT toggle ---
+        //--- AUTO_CUT toggle sw ---
+        //beep at change
         if (SW_AUTO_CUT.risingEdge){
             buzzer.beep(2, 100, 50);
         } else if (SW_AUTO_CUT.fallingEdge) {
             buzzer.beep(1, 400, 50);
+        }
+        //update enabled state
+        if (SW_AUTO_CUT.state) {
+            //enable autocut when not in target_reached state
+            //(prevent immediate/unexpected cut)
+            if (controlState != systemState_t::TARGET_REACHED){
+                autoCutEnabled = true;
+            }
+        } else {
+            //disable anytime (also stops countdown to auto cut)
+            autoCutEnabled = false;
         }
 
 
@@ -333,10 +341,10 @@ void task_control(void *pvParameter)
                 break;
 
             case systemState_t::WINDING: //wind fast, slow down when close
-                //set vfd speed depending on remaining distance 
+                                         //set vfd speed depending on remaining distance 
                 setDynSpeedLvl(); //slow down when close to target
                 handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
-                //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
+                                                               //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
                 break;
 
             case systemState_t::TARGET_REACHED:
@@ -344,32 +352,11 @@ void task_control(void *pvParameter)
                 //switch to counting state when no longer at or above target length
                 if ( lengthRemaining > 10 ) { //FIXME: require reset switch to be able to restart? or evaluate a tolerance here?
                     changeState(systemState_t::COUNTING);
-                    autoCutWaiting = false;
                 }
-                //handle delayed cutting if automatic cut is enabled
-                else if ( (autoCutEnabled == true)
+                //switch initiate countdown to auto-cut
+                else if ( (autoCutEnabled)
                         && (esp_log_timestamp() - timestamp_changedState > 300) ){ //wait for dislay msg "reached" to finish
-                    autoCutWaiting = true; //display countdown
-                    cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
-                    //- beep countdown -
-                    //time passed since last beep  >  time remaining / 10
-                    if ( (esp_log_timestamp() - timestamp_cut_lastBeep)  > (cut_msRemaining / 6)
-                            && (esp_log_timestamp() - timestamp_cut_lastBeep) > 50 ){ //dont trigger beeps faster than beep time
-                        buzzer.beep(1, 50, 0);
-                        timestamp_cut_lastBeep = esp_log_timestamp();
-                    }
-                    //- cancel countdown with AUTO_CUT off -
-                    if (!SW_AUTO_CUT.state) { //note: stop button also works
-                        autoCutWaiting = false;
-                        autoCutEnabled = false;
-                    }
-                    //- trigger cut if delay passed -
-                    else if (cut_msRemaining <= 0){
-                        cut_msRemaining = 0; //prevent negative number on display
-                        cutter_start();
-                        changeState(systemState_t::CUTTING);
-                        autoCutWaiting = false;
-                    }
+                    changeState(systemState_t::AUTO_CUT_WAITING);
                 }
                 //show msg when trying to start, but target is reached
                 if (SW_START.risingEdge){
@@ -379,8 +366,29 @@ void task_control(void *pvParameter)
                 }
                 break;
 
+            case systemState_t::AUTO_CUT_WAITING:
+                //handle delayed start of cut
+                cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
+                //- countdown stop conditions -
+                if (!autoCutEnabled || !SW_AUTO_CUT.state || SW_RESET.state || SW_CUT.state){ //TODO: also stop when target not reached anymore?
+                    changeState(systemState_t::COUNTING);
+                }
+                //- trigger cut if delay passed -
+                else if (cut_msRemaining <= 0){
+                    cutter_start();
+                    changeState(systemState_t::CUTTING);
+                }
+                //- beep countdown -
+                //time passed since last beep  >  time remaining / 6
+                else if ( (esp_log_timestamp() - timestamp_cut_lastBeep)  > (cut_msRemaining / 6)
+                        && (esp_log_timestamp() - timestamp_cut_lastBeep) > 50 ){ //dont trigger beeps faster than beep time
+                    buzzer.beep(1, 50, 0);
+                    timestamp_cut_lastBeep = esp_log_timestamp();
+                }
+                break;
+
             case systemState_t::CUTTING:
-                //exit if finished cutting
+                //exit when finished cutting
                 if (cutter_isRunning() == false){
                     //TODO stop if start buttons released?
                     changeState(systemState_t::COUNTING);
@@ -453,7 +461,7 @@ void task_control(void *pvParameter)
         //run handle function
         displayTop.handle();
         //indicate upcoming cut when pending
-        if (autoCutWaiting == true){
+        if (controlState == systemState_t::AUTO_CUT_WAITING){
             displayTop.blinkStrings(" CUT 1N ", "        ", 70, 30);
         }
         //otherwise show current position
@@ -485,7 +493,7 @@ void task_control(void *pvParameter)
             displayBot.blinkStrings("CUTTING]", "CUTTING[", 100, 100);
         }
         //show ms countdown to cut when pending
-        else if (autoCutWaiting == true) {
+        else if (controlState == systemState_t::AUTO_CUT_WAITING){
             sprintf(buf_disp2, "  %04d  ", cut_msRemaining);
             //displayBot.showString(buf_disp2); //TODO:blink "erreicht" overrides this. for now using blink as workaround
             displayBot.blinkStrings(buf_disp2, buf_disp2, 100, 100);
