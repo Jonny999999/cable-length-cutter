@@ -24,7 +24,6 @@ QueueHandle_t init_encoder(rotary_encoder_info_t * info){
 
 
 
-
 //====================
 //==== variables =====
 //====================
@@ -63,7 +62,7 @@ bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
 //function for changing the controlState with log output
 void changeState (systemState_t stateNew) {
     //only proceed when state actually changed
-    if (controlState == stateNew){
+    if (controlState == stateNew) {
         return; //already at target state -> nothing to do
     }
     //log change
@@ -73,7 +72,8 @@ void changeState (systemState_t stateNew) {
     //update timestamp
     timestamp_changedState = esp_log_timestamp();
 }
-                      
+          
+
 
 //===== handle Stop Condition =====
 //function that checks whether start button is released or target is reached (used in multiple states)
@@ -120,7 +120,7 @@ void setDynSpeedLvl(uint8_t lvlMax = 3){
         lvl = 3;
     }
     //limit to max lvl
-    if (lvl > lvlMax){
+    if (lvl > lvlMax) {
         lvl = lvlMax;
     }
     //update vfd speed level
@@ -182,15 +182,12 @@ void task_control(void *pvParameter)
         // Poll current position and direction
         rotary_encoder_get_state(&encoder, &encoderState);
         //--- calculate distance ---
-        //lengthNow = (float)encoderState.position * (MEASURING_ROLL_DIAMETER * PI) / 600; //TODO dont calculate constant factor every time FIXME: ROUNDING ISSUE float-int?
         lengthNow = (float)encoderState.position * 1000 / STEPS_PER_METER;
-
 
 
         //---------------------------
         //--------- buttons ---------
         //---------------------------
-        //TODO: ADD PRESET SWITCHES HERE
         //--- RESET switch ---
         if (SW_RESET.risingEdge) {
             rotary_encoder_reset(&encoder);
@@ -200,7 +197,6 @@ void task_control(void *pvParameter)
             //cutter_stop();
         }
 
-        
         //--- CUT switch ---
         //start cut cycle immediately
         if (SW_CUT.risingEdge) {
@@ -217,14 +213,13 @@ void task_control(void *pvParameter)
             }
             //error cant cut while motor is on
             else {
-                buzzer.beep(6, 70, 50);
+                buzzer.beep(6, 100, 50);
             }
         }
        
-
         //--- AUTO_CUT toggle sw ---
         //beep at change
-        if (SW_AUTO_CUT.risingEdge){
+        if (SW_AUTO_CUT.risingEdge) {
             buzzer.beep(2, 100, 50);
         } else if (SW_AUTO_CUT.fallingEdge) {
             buzzer.beep(1, 400, 50);
@@ -233,14 +228,13 @@ void task_control(void *pvParameter)
         if (SW_AUTO_CUT.state) {
             //enable autocut when not in target_reached state
             //(prevent immediate/unexpected cut)
-            if (controlState != systemState_t::TARGET_REACHED){
+            if (controlState != systemState_t::TARGET_REACHED) {
                 autoCutEnabled = true;
             }
         } else {
             //disable anytime (also stops countdown to auto cut)
             autoCutEnabled = false;
         }
-
 
         //--- manual mode ---
         //switch to manual motor control (2 buttons + poti)
@@ -249,7 +243,6 @@ void task_control(void *pvParameter)
             changeState(systemState_t::MANUAL);
             buzzer.beep(3, 100, 60);
         }
-
 
         //--- set custom target length ---
         //set target length to poti position when SET switch is pressed
@@ -289,7 +282,7 @@ void task_control(void *pvParameter)
 
         //--- target length presets ---
         if (controlState != systemState_t::MANUAL) { //dont apply preset length while controlling motor with preset buttons
-            if (SW_PRESET1.risingEdge){
+            if (SW_PRESET1.risingEdge) {
                 lengthTarget = 1000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(3, 100, 100, "S0LL    ");
@@ -318,11 +311,10 @@ void task_control(void *pvParameter)
         switch (controlState) {
             case systemState_t::COUNTING: //no motor action
                 vfd_setState(false);
-                //TODO check stop condition before starting - prevents motor from starting 2 cycles when 
+                //TODO check stop condition before starting - prevents motor from starting 2 cycles when already at target
                 //--- start winding to length ---
                 if (SW_START.risingEdge) {
                     changeState(systemState_t::WINDING_START);
-                    //TODO apply dynamic speed here too (if started when already very close)
                     vfd_setSpeedLevel(1); //start at low speed 
                     vfd_setState(true); //start motor
                     timestamp_motorStarted = esp_log_timestamp(); //save time started
@@ -341,10 +333,10 @@ void task_control(void *pvParameter)
                 break;
 
             case systemState_t::WINDING: //wind fast, slow down when close
-                                         //set vfd speed depending on remaining distance 
+                //set vfd speed depending on remaining distance 
                 setDynSpeedLvl(); //slow down when close to target
                 handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
-                                                               //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
+                //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
                 break;
 
             case systemState_t::TARGET_REACHED:
@@ -355,14 +347,14 @@ void task_control(void *pvParameter)
                 }
                 //switch initiate countdown to auto-cut
                 else if ( (autoCutEnabled)
-                        && (esp_log_timestamp() - timestamp_changedState > 300) ){ //wait for dislay msg "reached" to finish
+                        && (esp_log_timestamp() - timestamp_changedState > 300) ) { //wait for dislay msg "reached" to finish
                     changeState(systemState_t::AUTO_CUT_WAITING);
                 }
                 //show msg when trying to start, but target is reached
-                if (SW_START.risingEdge){
-                    buzzer.beep(3, 40, 30);
-                    displayTop.blink(2, 600, 800, "  S0LL  ");
-                    displayBot.blink(2, 600, 800, "ERREICHT");
+                if (SW_START.risingEdge) {
+                    buzzer.beep(2, 50, 30);
+                    displayTop.blink(2, 600, 500, "  S0LL  ");
+                    displayBot.blink(2, 600, 500, "ERREICHT");
                 }
                 break;
 
@@ -370,18 +362,18 @@ void task_control(void *pvParameter)
                 //handle delayed start of cut
                 cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
                 //- countdown stop conditions -
-                if (!autoCutEnabled || !SW_AUTO_CUT.state || SW_RESET.state || SW_CUT.state){ //TODO: also stop when target not reached anymore?
+                if (!autoCutEnabled || !SW_AUTO_CUT.state || SW_RESET.state || SW_CUT.state) { //TODO: also stop when target not reached anymore?
                     changeState(systemState_t::COUNTING);
                 }
                 //- trigger cut if delay passed -
-                else if (cut_msRemaining <= 0){
+                else if (cut_msRemaining <= 0) {
                     cutter_start();
                     changeState(systemState_t::CUTTING);
                 }
                 //- beep countdown -
                 //time passed since last beep  >  time remaining / 6
                 else if ( (esp_log_timestamp() - timestamp_cut_lastBeep)  > (cut_msRemaining / 6)
-                        && (esp_log_timestamp() - timestamp_cut_lastBeep) > 50 ){ //dont trigger beeps faster than beep time
+                        && (esp_log_timestamp() - timestamp_cut_lastBeep) > 50 ) { //dont trigger beeps faster than beep time
                     buzzer.beep(1, 50, 0);
                     timestamp_cut_lastBeep = esp_log_timestamp();
                 }
@@ -389,7 +381,7 @@ void task_control(void *pvParameter)
 
             case systemState_t::CUTTING:
                 //exit when finished cutting
-                if (cutter_isRunning() == false){
+                if (cutter_isRunning() == false) {
                     //TODO stop if start buttons released?
                     changeState(systemState_t::COUNTING);
                     //TODO reset automatically or wait for manual reset?
@@ -411,14 +403,14 @@ void task_control(void *pvParameter)
                 }
                 //P2 + P1 -> turn left
                 else if ( SW_PRESET1.state && !SW_PRESET3.state ) {
-                    vfd_setSpeedLevel(level); //TODO: use poti input for level
+                    vfd_setSpeedLevel(level);
                     vfd_setState(true, REV);
                     sprintf(buf_disp2, "[--%02i   ", level);
                     //                  123 45 678
                 }
                 //P2 + P3 -> turn right
                 else if ( SW_PRESET3.state && !SW_PRESET1.state ) {
-                    vfd_setSpeedLevel(level); //TODO: use poti input for level
+                    vfd_setSpeedLevel(level);
                     vfd_setState(true, FWD);
                     sprintf(buf_disp2, "   %02i--]", level);
                 }
@@ -461,7 +453,7 @@ void task_control(void *pvParameter)
         //run handle function
         displayTop.handle();
         //indicate upcoming cut when pending
-        if (controlState == systemState_t::AUTO_CUT_WAITING){
+        if (controlState == systemState_t::AUTO_CUT_WAITING) {
             displayTop.blinkStrings(" CUT 1N ", "        ", 70, 30);
         }
         //otherwise show current position
@@ -493,7 +485,7 @@ void task_control(void *pvParameter)
             displayBot.blinkStrings("CUTTING]", "CUTTING[", 100, 100);
         }
         //show ms countdown to cut when pending
-        else if (controlState == systemState_t::AUTO_CUT_WAITING){
+        else if (controlState == systemState_t::AUTO_CUT_WAITING) {
             sprintf(buf_disp2, "  %04d  ", cut_msRemaining);
             //displayBot.showString(buf_disp2); //TODO:blink "erreicht" overrides this. for now using blink as workaround
             displayBot.blinkStrings(buf_disp2, buf_disp2, 100, 100);
@@ -507,13 +499,25 @@ void task_control(void *pvParameter)
         }
 
 
+        //----------------------------
+        //------- control lamp -------
+        //----------------------------
+        //basic functionality of lamp:
+        //turn on when not idling
+        //TODO: add switch-case for different sates
+        //e.g. blink with different frequencies in different states
+        if (controlState != systemState_t::COUNTING
+                && controlState != systemState_t::TARGET_REACHED) {
+            gpio_set_level(GPIO_LAMP, 1);
+        }
+        else {
+            gpio_set_level(GPIO_LAMP, 0);
+        }
+
+
+
 #endif
         
-        //TODO: blink disp2 when set button pressed
-        //TODO: blink disp2 when preset button pressed (exept manual mode)
-        //TODO: write "MAN CTL" to disp2 when in manual mode
-        //TODO: display or blink "REACHED" when reached state and start pressed
-
     }
 
 }
