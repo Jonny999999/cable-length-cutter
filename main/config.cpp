@@ -9,6 +9,7 @@ gpio_evaluatedSwitch sw_gpio_32(GPIO_NUM_32, true, false); //pullup true, not in
 gpio_evaluatedSwitch sw_gpio_33(GPIO_NUM_33, true, false); //pullup true, not inverted (switch to GND, internal pullup used)
 gpio_evaluatedSwitch sw_gpio_25(GPIO_NUM_25, true, false); //pullup true, not inverted (switch to GND, internal pullup used)
 gpio_evaluatedSwitch sw_gpio_26(GPIO_NUM_26, true, false); //pullup true, not inverted (switch to GND, internal pullup used)
+gpio_evaluatedSwitch sw_gpio_14(GPIO_NUM_14, true, false); //pullup true, not inverted (switch to GND, internal pullup used)
 
 //--- switches connected to 4 sw to analog stripboard ---
 //evaluated switches with function to obtain the current input state instead of gpio

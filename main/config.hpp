@@ -17,7 +17,8 @@ extern "C" {
 #define GPIO_VFD_D1 GPIO_NUM_15     //ST1
 //#define GPIO_VFD_D2 GPIO_NUM_15     //ST1 (D2 only used with 7.5kw vfd)
 
-#define GPIO_MOS2 GPIO_NUM_5        //mos2
+#define GPIO_MOS1 GPIO_NUM_18       //mos1 (free)
+#define GPIO_LAMP GPIO_NUM_5        //mos2
 #define GPIO_RELAY GPIO_NUM_13
 #define GPIO_BUZZER GPIO_NUM_12
 
@@ -40,14 +41,15 @@ extern "C" {
 //see config.cpp for available evaluated switch objects
 #define SW_START sw_gpio_26
 #define SW_RESET sw_gpio_25
+#define SW_CUTTER_POS sw_gpio_14
 #define SW_SET     sw_gpio_analog_0
 #define SW_PRESET1 sw_gpio_analog_1
 #define SW_PRESET2 sw_gpio_analog_2
 #define SW_PRESET3 sw_gpio_analog_3
+#define SW_CUT sw_gpio_33
+#define SW_AUTO_CUT sw_gpio_32
 
 //unused but already available evaluated inputs
-//#define ? sw_gpio_33
-//#define ? sw_gpio_32
 //#define ? sw_gpio_34
 
 
@@ -96,6 +98,7 @@ extern gpio_evaluatedSwitch sw_gpio_32;
 extern gpio_evaluatedSwitch sw_gpio_33;
 extern gpio_evaluatedSwitch sw_gpio_25;
 extern gpio_evaluatedSwitch sw_gpio_26;
+extern gpio_evaluatedSwitch sw_gpio_14;
 
 //--- switches connected to 4-sw-to-analog stripboard ---
 extern gpio_evaluatedSwitch sw_gpio_analog_0;
