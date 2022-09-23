@@ -193,6 +193,7 @@ void task_control(void *pvParameter)
             rotary_encoder_reset(&encoder);
             lengthNow = 0;
             buzzer.beep(1, 700, 100);
+            displayTop.blink(2, 100, 100, "1ST     ");
             //TODO: stop cutter with reset switch?
             //cutter_stop();
         }
@@ -283,17 +284,17 @@ void task_control(void *pvParameter)
         //--- target length presets ---
         if (controlState != systemState_t::MANUAL) { //dont apply preset length while controlling motor with preset buttons
             if (SW_PRESET1.risingEdge) {
-                lengthTarget = 1000;
-                buzzer.beep(lengthTarget/1000, 25, 30);
-                displayBot.blink(3, 100, 100, "S0LL    ");
-            }
-            else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 5000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
-            else if (SW_PRESET3.risingEdge) {
+            else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 10000;
+                buzzer.beep(lengthTarget/1000, 25, 30);
+                displayBot.blink(2, 100, 100, "S0LL    ");
+            }
+            else if (SW_PRESET3.risingEdge) {
+                lengthTarget = 15000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
