@@ -54,7 +54,7 @@ int lengthBeeped = 0; //only beep once per meter during encoder test
 //automatic cut
 int cut_msRemaining = 0;
 uint32_t timestamp_cut_lastBeep = 0;
-uint32_t autoCut_delayMs = 3000; //TODO add this to config
+uint32_t autoCut_delayMs = 2500; //TODO add this to config
 bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
 
 
@@ -190,12 +190,15 @@ void task_control(void *pvParameter)
         //---------------------------
         //--- RESET switch ---
         if (SW_RESET.risingEdge) {
-            rotary_encoder_reset(&encoder);
-            lengthNow = 0;
-            buzzer.beep(1, 700, 100);
-            displayTop.blink(2, 100, 100, "1ST     ");
-            //TODO: stop cutter with reset switch?
-            //cutter_stop();
+            //dont reset when press used for stopping pending auto-cut
+            if (controlState != systemState_t::AUTO_CUT_WAITING) {
+                rotary_encoder_reset(&encoder);
+                lengthNow = 0;
+                buzzer.beep(1, 700, 100);
+                displayTop.blink(2, 100, 100, "1ST     ");
+                //TODO: stop cutter with reset switch?
+                //cutter_stop();
+            }
         }
 
         //--- CUT switch ---
@@ -205,6 +208,9 @@ void task_control(void *pvParameter)
             if (cutter_isRunning()) {
                 cutter_stop();
                 buzzer.beep(1, 600, 0);
+            }
+            else if (controlState == systemState_t::AUTO_CUT_WAITING) {
+                //do nothing when press used for stopping pending auto-cut
             }
             //start cutter when motor not active
             else if (controlState != systemState_t::WINDING_START //TODO use vfd state here?
@@ -363,8 +369,13 @@ void task_control(void *pvParameter)
                 //handle delayed start of cut
                 cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
                 //- countdown stop conditions -
-                if (!autoCutEnabled || !SW_AUTO_CUT.state || SW_RESET.state || SW_CUT.state) { //TODO: also stop when target not reached anymore?
+                //stop with any button
+                if (!autoCutEnabled
+                        || SW_RESET.state || SW_CUT.state 
+                        || SW_SET.state || SW_PRESET1.state
+                        || SW_PRESET2.state || SW_PRESET3.state) {//TODO: also stop when target not reached anymore?
                     changeState(systemState_t::COUNTING);
+                    buzzer.beep(5, 100, 50);
                 }
                 //- trigger cut if delay passed -
                 else if (cut_msRemaining <= 0) {

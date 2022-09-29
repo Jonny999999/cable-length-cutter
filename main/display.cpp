@@ -34,7 +34,7 @@ max7219_t display_init(){
     ESP_ERROR_CHECK(max7219_init_desc(&dev, HOST, MAX7219_MAX_CLOCK_SPEED_HZ, DISPLAY_PIN_NUM_CS));
     ESP_ERROR_CHECK(max7219_init(&dev));
     //0...15
-    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 8));
+    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 8)); //TODO add this to config
     return dev;
     //display = dev;
     ESP_LOGI(TAG, "initializing display - done");
@@ -50,7 +50,7 @@ void display_ShowWelcomeMsg(max7219_t dev){
     //show name and date
     ESP_LOGI(TAG, "showing startup message...");
     max7219_clear(&dev);
-    max7219_draw_text_7seg(&dev, 0, "CUTTER  20.08.2022");
+    max7219_draw_text_7seg(&dev, 0, "CUTTER  29.09.2022");
     //                                   1234567812 34 5678
     vTaskDelay(pdMS_TO_TICKS(700));
     //scroll "hello" over 2 displays
@@ -60,6 +60,11 @@ void display_ShowWelcomeMsg(max7219_t dev){
         max7219_draw_text_7seg(&dev, 0, hello + (22 - offset) );
         vTaskDelay(pdMS_TO_TICKS(50));
     }
+
+    //noticed rare bug that one display does not initialize / is not configured correctly after start
+    //initialize display again after the welcome message in case it did not work the first time
+    ESP_ERROR_CHECK(max7219_init(&dev));
+    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 8)); //TODO add this to config
 }
 
 
