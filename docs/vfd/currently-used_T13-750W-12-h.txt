@@ -1,0 +1,2 @@
+currently the vfd 'T13-750W-12-h' is actually used. 
+Included documentation about T13-400W here too, modbus specification might be the same.

@@ -7,3 +7,6 @@ build
 
 # drawio files
 *.bkp
+
+# freecad backup files
+*.FCStd1
