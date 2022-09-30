@@ -43,7 +43,7 @@ QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_state_t encoderState;
 
 int lengthNow = 0; //length measured in mm
-int lengthTarget = 3000; //target length in mm
+int lengthTarget = 5000; //default target length in mm
 int lengthRemaining = 0; //(target - now) length needed for reaching the target
 int potiRead = 0; //voltage read from adc
 uint32_t timestamp_motorStarted = 0; //timestamp winding started
@@ -312,7 +312,7 @@ void task_control(void *pvParameter)
         //--------- control ---------
         //---------------------------
         //calculate length difference
-        lengthRemaining = lengthTarget - lengthNow;
+        lengthRemaining = lengthTarget - lengthNow + TARGET_LENGTH_OFFSET;
 
         //--- statemachine ---
         switch (controlState) {
@@ -349,7 +349,7 @@ void task_control(void *pvParameter)
             case systemState_t::TARGET_REACHED:
                 vfd_setState(false);
                 //switch to counting state when no longer at or above target length
-                if ( lengthRemaining > 10 ) { //FIXME: require reset switch to be able to restart? or evaluate a tolerance here?
+                if ( lengthNow < lengthTarget - TARGET_REACHED_TOLERANCE ) {
                     changeState(systemState_t::COUNTING);
                 }
                 //switch initiate countdown to auto-cut

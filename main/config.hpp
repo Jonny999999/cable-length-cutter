@@ -55,6 +55,9 @@ extern "C" {
 
 
 
+//=============================
+//======= configuration =======
+//=============================
 //--------------------------
 //----- display config -----
 //--------------------------
@@ -79,11 +82,20 @@ extern "C" {
 //--------------------------
 //------ calibration -------
 //--------------------------
-//use encoder test for calibration and calculate STEPS_PER_METER
-//#define ENCODER_TEST //show encoder count instead of converted meters
+//enable mode  encoder test for calibration
+//if defined, displays always show length and steps instead of the normal messages
+//#define ENCODER_TEST
+
+//steps per meter
 #define STEPS_PER_METER 2127 //roll-v3-gummi-86.6mm - d=89.8mm
-//#define MEASURING_ROLL_DIAMETER 86.6 //roll v3 large
-//#define PI 3.14159265358979323846
+
+//millimetres added to target length
+//to ensure that length does not fall short when spool slightly rotates back after stop
+#define TARGET_LENGTH_OFFSET 20
+
+//millimetres lengthNow can be below lengthTarget to still stay in target_reached state
+#define TARGET_REACHED_TOLERANCE 5
+
 
 
 
