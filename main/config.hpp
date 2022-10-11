@@ -91,7 +91,7 @@ extern "C" {
 
 //millimetres added to target length
 //to ensure that length does not fall short when spool slightly rotates back after stop
-#define TARGET_LENGTH_OFFSET 20
+#define TARGET_LENGTH_OFFSET 0
 
 //millimetres lengthNow can be below lengthTarget to still stay in target_reached state
 #define TARGET_REACHED_TOLERANCE 5

@@ -110,11 +110,11 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
 void setDynSpeedLvl(uint8_t lvlMax = 3){
     uint8_t lvl;
     //define speed level according to difference
-    if (lengthRemaining < 20) {
+    if (lengthRemaining < 40) {
         lvl = 0;
-    } else if (lengthRemaining < 200) {
+    } else if (lengthRemaining < 300) {
         lvl = 1;
-    } else if (lengthRemaining < 600) {
+    } else if (lengthRemaining < 700) {
         lvl = 2;
     } else { //more than last step remaining
         lvl = 3;
@@ -257,7 +257,7 @@ void task_control(void *pvParameter)
             //read adc
             potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
-            int lengthTargetNew = (float)potiRead / 4095 * 30000;
+            int lengthTargetNew = (float)potiRead / 4095 * 50000;
             //apply hysteresis and round to whole meters //TODO optimize this
             if (lengthTargetNew % 1000 < 200) { //round down if less than .2 meter
                 ESP_LOGD(TAG, "Poti input = %d -> rounding down", lengthTargetNew);
