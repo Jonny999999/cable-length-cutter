@@ -1,6 +1,57 @@
-# Hardware
+# Links
 ## connection plan
 See [connection-plan.pdf](connection-plan.pdf)  
+
+## flowchart firmware
+See [function-diagram.drawio.pdf](function-diagram.drawio.pdf)  
+
+
+
+# Installation
+### Install esp-idf
+Currently using ESP-IDF v4.1.4 (5.X did not work due to breaking changes and CMAKE issues)
+1. download esp-idf: 
+```
+clone the esp-idf repository from github
+```
+2. checkout version needed:
+```
+git checkout release/4.1
+```
+3. run install script e.g.
+```
+/opt/esp-idf/install.sh
+```
+
+### Clone this repo
+```
+git clone git@github.com:Jonny999999/cable-length-cutter.git
+```
+
+
+
+# Compilation
+### Set up environment
+```bash
+source /opt/esp-idf/export.sh
+```
+(run once in terminal)
+
+### Compile
+```bash
+idf.py build
+#or
+idf.py build flash monitor
+```
+
+
+
+
+# Usage
+[WIP...]
+
+
+
 
 
 # Components
