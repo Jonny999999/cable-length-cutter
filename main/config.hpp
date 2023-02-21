@@ -79,6 +79,17 @@ extern "C" {
 #define ENABLE_HALF_STEPS false  // Set to true to enable tracking of rotary encoder at half step resolution
 #define FLIP_DIRECTION    false  // Set to true to reverse the clockwise/counterclockwise sense
 
+
+
+//--------------------------
+//----- stepper config -----
+//--------------------------
+//enable stepper test mode (dont start control and encoder task)
+#define STEPPER_TEST
+//more detailed options for testing are currently defined in guide-stepper.cpp
+
+
+
 //--------------------------
 //------ calibration -------
 //--------------------------
