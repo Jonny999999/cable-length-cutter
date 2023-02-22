@@ -1,6 +1,6 @@
 # Links
 ## connection plan
-See [connection-plan.pdf](connection-plan.pdf)  
+See [connection-plan.drawio.pdf](connection-plan.drawio.pdf)  
 
 ## flowchart firmware
 See [function-diagram.drawio.pdf](function-diagram.drawio.pdf)  
@@ -9,14 +9,14 @@ See [function-diagram.drawio.pdf](function-diagram.drawio.pdf)
 
 # Installation
 ### Install esp-idf
-Currently using ESP-IDF v4.1.4 (5.X did not work due to breaking changes and CMAKE issues)
+Currently using ESP-IDF **v4.4.4-148** (5.x did not work due to breaking changes and CMAKE issues)
 1. download esp-idf: 
 ```
-clone the esp-idf repository from github
+clone the esp-idf repository from github to /opt
 ```
 2. checkout version needed:
 ```
-git checkout release/4.1
+git checkout release/4.4
 ```
 3. run install script e.g.
 ```
