@@ -1,5 +1,21 @@
+extern "C"
+{
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "driver/adc.h"
+}
+
+#include "DendoStepper.h"
+#include "config.hpp"
 #include "guide-stepper.hpp"
 
+
+//---------------------
+//--- configuration ---
+//---------------------
+//also see config.hpp
 #define LEN_MOVE 90     //mm
 #define SPEED_MIN 5.0   //mm/s
 #define SPEED_MAX 110.0 //mm/s

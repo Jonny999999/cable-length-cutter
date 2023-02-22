@@ -1,15 +1,4 @@
-extern "C"
-{
-#include <stdio.h>
-#include "DendoStepper.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_log.h"
-#include "driver/adc.h"
-}
-
-#include "config.hpp"
-
+#pragma once
 
 //task that initializes and controls the stepper motor
 //current functionality: 
