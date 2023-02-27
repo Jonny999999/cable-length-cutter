@@ -16,9 +16,9 @@ extern "C"
 //--- configuration ---
 //---------------------
 //also see config.hpp
-#define LEN_MOVE 90     //mm
-#define SPEED_MIN 5.0   //mm/s
-#define SPEED_MAX 110.0 //mm/s
+#define LEN_MOVE 65     //mm
+#define SPEED_MIN 2.0   //mm/s
+#define SPEED_MAX 60.0 //mm/s
 
 #define ACCEL_MS 100.0  //ms from 0 to max
 #define DECEL_MS 90.0   //ms from max to 0
