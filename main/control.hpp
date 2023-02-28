@@ -10,7 +10,6 @@ extern "C"
 #include "esp_log.h"
 #include "driver/adc.h"
 
-#include "rotary_encoder.h"
 #include "max7219.h"
 
 }

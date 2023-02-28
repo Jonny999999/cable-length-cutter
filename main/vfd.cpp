@@ -4,9 +4,9 @@
 
 const char* vfd_directionStr[2] = {"FWD", "REV"};
 static const char *TAG = "vfd";
-uint8_t level = 0; //current speed level
-bool state = false; //current state
-vfd_direction_t direction = FWD; //current direction
+static uint8_t level = 0; //current speed level
+static bool state = false; //current state
+static vfd_direction_t direction = FWD; //current direction
 
 
 //=============================

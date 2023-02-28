@@ -79,7 +79,7 @@ extern "C" void app_main()
     gpio_set_level(GPIO_NUM_17, 1);
 
     //init encoder (global)
-    encoder_queue = init_encoder(&encoder);
+    encoder_queue = encoder_init();
     
     //define loglevel
     esp_log_level_set("*", ESP_LOG_INFO);
@@ -94,6 +94,9 @@ extern "C" void app_main()
 #else
     //create task for controlling the machine
     xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+
+    //create task for controlling the stepper
+    xTaskCreate(task_stepper_ctl, "task_stepper-test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
 
     //create task for handling the buzzer
     xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);

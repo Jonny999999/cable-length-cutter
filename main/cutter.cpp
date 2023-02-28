@@ -15,9 +15,9 @@ bool checkTimeout();
 //---------------------------
 //----- local variables -----
 //---------------------------
-cutter_state_t cutter_state = cutter_state_t::IDLE;
-uint32_t timestamp_turnedOn;
-uint32_t msTimeout = 3000;
+static cutter_state_t cutter_state = cutter_state_t::IDLE;
+static uint32_t timestamp_turnedOn;
+static uint32_t msTimeout = 3000;
 static const char *TAG = "cutter"; //tag for logging
 
 

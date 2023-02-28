@@ -9,29 +9,23 @@ static const char *TAG = "control"; //tag for logging
 
 const char* systemStateStr[7] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "AUTO_CUT_WAITING", "CUTTING", "MANUAL"};
 systemState_t controlState = systemState_t::COUNTING;
-uint32_t timestamp_changedState = 0;
+static uint32_t timestamp_changedState = 0;
 
-char buf_disp[20]; //both displays
-char buf_disp1[10];// 8 digits + decimal point + \0
-char buf_disp2[10];// 8 digits + decimal point + \0
-char buf_tmp[15];
+static char buf_disp1[10];// 8 digits + decimal point + \0
+static char buf_disp2[10];// 8 digits + decimal point + \0
+static char buf_tmp[15];
 
-rotary_encoder_state_t encoderState;
-
-int lengthNow = 0; //length measured in mm
-int lengthTarget = 5000; //default target length in mm
-int lengthRemaining = 0; //(target - now) length needed for reaching the target
-int potiRead = 0; //voltage read from adc
-uint32_t timestamp_motorStarted = 0; //timestamp winding started
+static int lengthNow = 0; //length measured in mm
+static int lengthTarget = 5000; //default target length in mm
+static int lengthRemaining = 0; //(target - now) length needed for reaching the target
+static int potiRead = 0; //voltage read from adc
+static uint32_t timestamp_motorStarted = 0; //timestamp winding started
                                      
-//encoder test / calibration
-int lengthBeeped = 0; //only beep once per meter during encoder test
-                      
 //automatic cut
-int cut_msRemaining = 0;
-uint32_t timestamp_cut_lastBeep = 0;
-uint32_t autoCut_delayMs = 2500; //TODO add this to config
-bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
+static int cut_msRemaining = 0;
+static uint32_t timestamp_cut_lastBeep = 0;
+static uint32_t autoCut_delayMs = 2500; //TODO add this to config
+static bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
 
 
 //===== change State =====
@@ -153,10 +147,8 @@ void task_control(void *pvParameter)
         //----------------------------
         //------ rotary encoder ------
         //----------------------------
-        // Poll current position and direction
-        rotary_encoder_get_state(&encoder, &encoderState);
-        //--- calculate distance ---
-        lengthNow = (float)encoderState.position * 1000 / ENCODER_STEPS_PER_METER;
+        //--- get current length since last reset ---
+        lengthNow = encoder_getLenMm();
 
 
         //---------------------------
@@ -166,7 +158,7 @@ void task_control(void *pvParameter)
         if (SW_RESET.risingEdge) {
             //dont reset when press used for stopping pending auto-cut
             if (controlState != systemState_t::AUTO_CUT_WAITING) {
-                rotary_encoder_reset(&encoder);
+                encoder_reset();
                 lengthNow = 0;
                 buzzer.beep(1, 700, 100);
                 displayTop.blink(2, 100, 100, "1ST     ");
@@ -371,7 +363,7 @@ void task_control(void *pvParameter)
                     //TODO stop if start buttons released?
                     changeState(systemState_t::COUNTING);
                     //TODO reset automatically or wait for manual reset?
-                    rotary_encoder_reset(&encoder);
+                    encoder_reset();
                     lengthNow = 0;
                     buzzer.beep(1, 700, 100);
                 }
@@ -417,7 +409,7 @@ void task_control(void *pvParameter)
         displayTop.handle();
         displayBot.handle();
         //-- show encoder steps on display1 ---
-        sprintf(buf_disp1, "EN %05d", encoderState.position); //count
+        sprintf(buf_disp1, "EN %05d", encoder_getSteps); //count
         displayTop.showString(buf_disp1);
         //--- show converted distance on display2 ---
         sprintf(buf_disp2, "Met %5.3f", (float)lengthNow/1000); //m
