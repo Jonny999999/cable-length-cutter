@@ -9,6 +9,7 @@ idf_component_register(
         "cutter.cpp"
         "switchesAnalog.cpp"
         "guide-stepper.cpp"
+        "encoder.cpp"
     INCLUDE_DIRS 
         "."
     )

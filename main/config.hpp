@@ -85,7 +85,10 @@ extern "C" {
 //----- stepper config -----
 //--------------------------
 //enable stepper test mode (dont start control and encoder task)
-#define STEPPER_TEST
+//#define STEPPER_TEST
+#define STEPPER_STEP_PIN GPIO_NUM_18 //(mos1)
+#define STEPPER_DIR_PIN GPIO_NUM_5   //(mos2)
+#define STEPPER_EN_PIN GPIO_NUM_0 //not connected (stepper always on)
 //more detailed options for testing are currently defined in guide-stepper.cpp
 
 
@@ -98,7 +101,7 @@ extern "C" {
 //#define ENCODER_TEST
 
 //steps per meter
-#define STEPS_PER_METER 2127 //roll-v3-gummi-86.6mm - d=89.8mm
+#define ENCODER_STEPS_PER_METER 2127 //roll-v3-gummi-86.6mm - d=89.8mm
 
 //millimetres added to target length
 //to ensure that length does not fall short when spool slightly rotates back after stop

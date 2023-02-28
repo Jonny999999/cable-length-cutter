@@ -1,27 +1,5 @@
 #include "control.hpp"
-
-
-//========================
-//===== init encoder =====
-//========================
-QueueHandle_t init_encoder(rotary_encoder_info_t * info){
-    // esp32-rotary-encoder requires that the GPIO ISR service is installed before calling rotary_encoder_register()
-    ESP_ERROR_CHECK(gpio_install_isr_service(0));
-
-    // Initialise the rotary encoder device with the GPIOs for A and B signals
-    ESP_ERROR_CHECK(rotary_encoder_init(info, ROT_ENC_A_GPIO, ROT_ENC_B_GPIO));
-    ESP_ERROR_CHECK(rotary_encoder_enable_half_steps(info, ENABLE_HALF_STEPS));
-#ifdef FLIP_DIRECTION
-    ESP_ERROR_CHECK(rotary_encoder_flip_direction(info));
-#endif
-
-    // Create a queue for events from the rotary encoder driver.
-    // Tasks can read from this queue to receive up to date position information.
-    QueueHandle_t event_queue = rotary_encoder_create_queue();
-    ESP_ERROR_CHECK(rotary_encoder_set_queue(info, event_queue));
-    return event_queue;
-}
-
+#include "encoder.hpp"
 
 
 //====================
@@ -38,8 +16,6 @@ char buf_disp1[10];// 8 digits + decimal point + \0
 char buf_disp2[10];// 8 digits + decimal point + \0
 char buf_tmp[15];
 
-rotary_encoder_info_t encoder; //encoder device/info
-QueueHandle_t encoder_queue = NULL; //encoder event queue
 rotary_encoder_state_t encoderState;
 
 int lengthNow = 0; //length measured in mm
@@ -135,8 +111,6 @@ void setDynSpeedLvl(uint8_t lvlMax = 3){
 //========================
 void task_control(void *pvParameter)
 {
-    //initialize encoder
-    encoder_queue = init_encoder(&encoder);
 
     //initialize display
     max7219_t two7SegDisplays = display_init();
@@ -182,7 +156,7 @@ void task_control(void *pvParameter)
         // Poll current position and direction
         rotary_encoder_get_state(&encoder, &encoderState);
         //--- calculate distance ---
-        lengthNow = (float)encoderState.position * 1000 / STEPS_PER_METER;
+        lengthNow = (float)encoderState.position * 1000 / ENCODER_STEPS_PER_METER;
 
 
         //---------------------------
