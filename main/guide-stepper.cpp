@@ -22,8 +22,10 @@ extern "C"
 
 #define STEPPER_TEST_TRAVEL 65     //mm
                         //
-#define MIN 0
-#define MAX 60 
+#define MIN_MM 0
+#define MAX_MM 60 
+#define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
+#define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
 
 #define SPEED_MIN 2.0   //mm/s
@@ -47,90 +49,72 @@ extern "C"
 static DendoStepper step;
 static const char *TAG = "stepper"; //tag for logging
 
-static int stepp_lengthNow = 0; //length measured in mm
-static int lengthPrev = 0; //length last check
-
 static bool stepp_direction = true;
-static uint64_t posNow = 0;
-
+static uint32_t posNow = 0;
 
 
 
 //----------------------
 //----- functions ------
 //----------------------
-//move left and right or reverse while winding
-void travelDist(int length){
-    //uint64_t posNow = step.getPositionMm();
+//move axis certain Steps (relative) between left and right or reverse when negative
+void travelSteps(int stepsTarget){
+    //posNow = step.getPositionMm(); //not otherwise controlled, so no update necessary
+    int stepsToGo, remaining;
 
-        int d, remaining;
-    d = abs(length);
-    if(length < 0) stepp_direction = !stepp_direction; //invert direction in reverse mode
+    stepsToGo = abs(stepsTarget);
+    if(stepsTarget < 0) stepp_direction = !stepp_direction; //invert direction in reverse mode
 
-    while (d != 0){
+    while (stepsToGo != 0){
         //--- currently moving right ---
-        if (stepp_direction == true){         //currently moving right
-            remaining = MAX - posNow;   //calc remaining distance fom current position to limit
-            if (d > remaining){         //new distance will exceed limit
-                step.runAbsMm (MAX);        //move to limit
-                                          posNow=MAX;
-                stepp_direction = false;      //change current direction for next iteration
-                d = d - remaining;      //decrease target length by already traveled distance
-                printf(" --- changed direction (L) --- \n ");
+        if (stepp_direction == true){               //currently moving right
+            remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
+            if (stepsToGo > remaining){             //new distance will exceed limit
+                step.runAbs (POS_MAX_STEPS);        //move to limit
+                while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
+                posNow = POS_MAX_STEPS;
+                stepp_direction = false;            //change current direction for next iteration
+                stepsToGo = stepsToGo - remaining;  //decrease target length by already traveled distance
+                ESP_LOGI(TAG, " --- moved to max -> change direction (L) --- \n ");
             }
-            else {                      //target distance does not reach the limit
-                step.runAbsMm (posNow + d); //move by (remaining) distance to reach target length
-                printf("moving to %lld\n", posNow+d);
-                posNow += d;
-                d = 0;                  //finished, reset target length (could as well exit loop/break)
+            else {                                  //target distance does not reach the limit
+                step.runAbs (posNow + stepsToGo);   //move by (remaining) distance to reach target length
+                while(step.getState() != 1) vTaskDelay(2); //wait for move to finish
+                ESP_LOGD(TAG, "moving to %d\n", posNow+stepsToGo);
+                posNow += stepsToGo;
+                stepsToGo = 0;                      //finished, reset target length (could as well exit loop/break)
             }
         }
 
         //--- currently moving left ---
         else {
-            remaining = posNow - MIN;
-            if (d > remaining){
-                step.runAbsMm (MIN);
-                posNow=0;
+            remaining = posNow - POS_MIN_STEPS;
+            if (stepsToGo > remaining){
+                step.runAbs (POS_MIN_STEPS);
+                while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
+                posNow = POS_MIN_STEPS;
                 stepp_direction = true;
-                d = d - remaining;
-                printf(" --- changed direction (R) --- \n ");
+                stepsToGo = stepsToGo - remaining;
+                ESP_LOGI(TAG, " --- moved to min -> change direction (R) --- \n ");
             }
             else {
-                step.runAbsMm (posNow - d); //when moving left the coordinate has to be decreased
-                printf("moving to %lld\n", posNow-d);
-                posNow -= d;
-                d = 0;
+                step.runAbs (posNow - stepsToGo);           //when moving left the coordinate has to be decreased
+                while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
+                ESP_LOGD(TAG, "moving to %d\n", posNow - stepsToGo);
+                posNow -= stepsToGo;
+                stepsToGo = 0;
             }
         }
     }
-
-    if(length < 0) stepp_direction = !stepp_direction; //undo inversion of stepp_direction after reverse mode is finished
+    if(stepsTarget < 0) stepp_direction = !stepp_direction; //undo inversion of stepp_direction after reverse mode is finished
     return;
-
-
-
 }
 
 
-
-
-
-
-//calculate time needed for certain length (NOT NEEDED/ DELETE)
-//float mmToS(int l){
-//
-//    double accel = SPEED_MAX / (ACCEL_MS/1000);
-//    double t_accelMax = ACCEL_MS/1000;
-//    double l_accelMax = accel * t_accelMax * t_accelMax;
-//
-//    printf("accel=%.2lf mm/s2 __ t_accelMAX=%.2lfs __ l_accelMax=%.2lfmm\n", accel, t_accelMax, l_accelMax);
-//    if (l < l_accelMax){
-//        return sqrt(l / accel);
-//    } else {
-//        return t_accelMax +  (l - l_accelMax) / SPEED_MAX;
-//    }
-//}
+//move axis certain Mm (relative) between left and right or reverse when negative
+void travelMm(int length){
+    travelSteps(length * STEPPER_STEPS_PER_MM);
+}
 
 
 //define zero/start position 
@@ -140,7 +124,7 @@ void home() {
     ESP_LOGW(TAG, "auto-home...");
     step.setSpeedMm(120, 120, 100);
     step.runInf(0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
     step.stop();
     step.resetAbsolute();
     ESP_LOGW(TAG, "auto-home finished");
@@ -177,9 +161,9 @@ void updateSpeedFromAdc() {
 
 
 
-//---------------------
-//------- TASK --------
-//---------------------
+//----------------------------
+//---- TASK stepper-test -----
+//----------------------------
 void task_stepper_test(void *pvParameter)
 {
     init_stepper();
@@ -199,29 +183,49 @@ void task_stepper_test(void *pvParameter)
 }
 
 
+//----------------------------
+//----- TASK stepper-ctl -----
+//----------------------------
 void task_stepper_ctl(void *pvParameter)
 {
+    //variables
+    int encStepsNow = 0; //get curret steps of encoder
+    int encStepsPrev = 0; //steps at last check
+    int encStepsDelta = 0; //steps changed since last iteration
+
+    double stepsTravel = 0; //steps axis hast to travel
+
     init_stepper();
     home();
 
     while(1){
         //get current length
-        stepp_lengthNow = encoder_getLenMm();
+        encStepsNow = encoder_getSteps();
 
-        int lengthDelta = stepp_lengthNow - lengthPrev;
+        //calculate change
+        encStepsDelta = encStepsNow - encStepsPrev; //FIXME MAJOR BUG: when resetting encoder/length in control task, diff will be huge!
         //TODO add modifier e.g. poti value
-        int travel = lengthDelta * D_CABLE / (PI * D_REEL); //calc distance to move
-        ESP_LOGI(TAG, "delta: %d travel: %d",lengthDelta, travel);
-                                                            //FIXME: rounding issue? e.g. 1.4 gets lost
-        if (abs(travel) > 1){ //when ready to move axis by at least 1 millimeter
-        ESP_LOGI(TAG, "EXCEEDED: delta: %d travel: %d",lengthDelta, travel);
-            travelDist(travel);
+
+        //read potentiometer for calibration
+        float potiModifier = (float) 4095 / gpio_readAdc(ADC_CHANNEL_POTI); //0-4095 -> 0-1
+        ESP_LOGI(TAG, "current poti-modifier = %f", potiModifier);
+
+        //calculate steps moved
+        //steps-axis = (length moved in mm)   *   (travel distance per length)   *   (stepper steps per mm)
+        stepsTravel = (float) (encStepsDelta * 1000 / ENCODER_STEPS_PER_METER) *  (D_CABLE/(PI*D_REEL))  *  (STEPPER_STEPS_PER_MM);
+        //FIXME: rounding issue? e.g. 1.4 steps gets lost
+        ESP_LOGD(TAG, "stepsDelta: %d stepsTravel: %lf",encStepsDelta, stepsTravel);
+
+        //move axis when ready to move at least 1 step
+        if (abs((int)stepsTravel) > 1){
+            ESP_LOGI(TAG, "MOVING %d steps",(int)stepsTravel);
+            travelSteps((int)stepsTravel);
             while(step.getState() != 1) vTaskDelay(2); //wait for move to finish
-            lengthPrev = stepp_lengthNow; //update length
+            encStepsPrev = encStepsNow; //update length
         }
         else {
+            //TODO use encoder queue to only run this check at encoder event?
             vTaskDelay(5);
         }
     }
-
 }
