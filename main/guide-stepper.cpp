@@ -21,7 +21,7 @@ extern "C"
 //for pin definition
 
 #define STEPPER_TEST_TRAVEL 65     //mm
-                        //
+                                   //
 #define MIN_MM 0
 #define MAX_MM 60 
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
@@ -38,7 +38,7 @@ extern "C"
 #define STEPPER_STEPS_PER_MM STEPPER_STEPS_PER_ROT/4
 
 #define D_CABLE 6
-#define D_REEL 155 //actual 170
+#define D_REEL 160 //actual 170
 #define PI 3.14159
 
 
@@ -71,7 +71,7 @@ void travelSteps(int stepsTarget){
             remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
             if (stepsToGo > remaining){             //new distance will exceed limit
                 step.runAbs (POS_MAX_STEPS);        //move to limit
-                while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
+                while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
                 posNow = POS_MAX_STEPS;
                 stepp_direction = false;            //change current direction for next iteration
                 stepsToGo = stepsToGo - remaining;  //decrease target length by already traveled distance
@@ -79,7 +79,7 @@ void travelSteps(int stepsTarget){
             }
             else {                                  //target distance does not reach the limit
                 step.runAbs (posNow + stepsToGo);   //move by (remaining) distance to reach target length
-                while(step.getState() != 1) vTaskDelay(2); //wait for move to finish
+                while(step.getState() != 1) vTaskDelay(1); //wait for move to finish
                 ESP_LOGD(TAG, "moving to %d\n", posNow+stepsToGo);
                 posNow += stepsToGo;
                 stepsToGo = 0;                      //finished, reset target length (could as well exit loop/break)
@@ -122,8 +122,8 @@ void travelMm(int length){
 //TODO: limit switch
 void home() {
     ESP_LOGW(TAG, "auto-home...");
-    step.setSpeedMm(120, 120, 100);
-    step.runInf(0);
+    step.setSpeedMm(100, 500, 10);
+    step.runInf(1);
     vTaskDelay(1500 / portTICK_PERIOD_MS);
     step.stop();
     step.resetAbsolute();
@@ -171,16 +171,17 @@ void task_stepper_test(void *pvParameter)
 
     while (1) {
         updateSpeedFromAdc();
-        step.runPosMm(-STEPPER_TEST_TRAVEL);
+        step.runPosMm(STEPPER_TEST_TRAVEL);
         while(step.getState() != 1) vTaskDelay(2);
         ESP_LOGI(TAG, "finished moving right => moving left");
 
         updateSpeedFromAdc();
-        step.runPosMm(STEPPER_TEST_TRAVEL);
+        step.runPosMm(-STEPPER_TEST_TRAVEL);
         while(step.getState() != 1) vTaskDelay(2); //1=idle
         ESP_LOGI(TAG, "finished moving left => moving right");
     }
 }
+
 
 
 //----------------------------
@@ -193,7 +194,14 @@ void task_stepper_ctl(void *pvParameter)
     int encStepsPrev = 0; //steps at last check
     int encStepsDelta = 0; //steps changed since last iteration
 
-    double stepsTravel = 0; //steps axis hast to travel
+    double cableLen = 0;
+    double travelStepsExact = 0; //steps axis has to travel
+    double travelStepsPartial = 0;
+    int travelStepsFull = 0;
+    double travelMm = 0;
+    double turns = 0;
+
+    float potiModifier;
 
     init_stepper();
     home();
@@ -204,28 +212,34 @@ void task_stepper_ctl(void *pvParameter)
 
         //calculate change
         encStepsDelta = encStepsNow - encStepsPrev; //FIXME MAJOR BUG: when resetting encoder/length in control task, diff will be huge!
-        //TODO add modifier e.g. poti value
 
-        //read potentiometer for calibration
-        float potiModifier = (float) 4095 / gpio_readAdc(ADC_CHANNEL_POTI); //0-4095 -> 0-1
-        ESP_LOGI(TAG, "current poti-modifier = %f", potiModifier);
+        //read potentiometer and normalize (0-1) to get a variable for testing
+        potiModifier = (float) gpio_readAdc(ADC_CHANNEL_POTI) / 4095; //0-4095 -> 0-1
+        //ESP_LOGI(TAG, "current poti-modifier = %f", potiModifier);
 
-        //calculate steps moved
-        //steps-axis = (length moved in mm)   *   (travel distance per length)   *   (stepper steps per mm)
-        stepsTravel = (float) (encStepsDelta * 1000 / ENCODER_STEPS_PER_METER) *  (D_CABLE/(PI*D_REEL))  *  (STEPPER_STEPS_PER_MM);
-        //FIXME: rounding issue? e.g. 1.4 steps gets lost
-        ESP_LOGD(TAG, "stepsDelta: %d stepsTravel: %lf",encStepsDelta, stepsTravel);
+        //calculate steps to move
+        cableLen = (double)encStepsDelta * 1000 / ENCODER_STEPS_PER_METER;
+        turns = cableLen / (PI * D_REEL);
+        travelMm = turns * D_CABLE;
+        travelStepsExact = travelMm * STEPPER_STEPS_PER_MM  +  travelStepsPartial; //convert mm to steps and add not moved partial steps
+        travelStepsPartial = 0;
+        travelStepsFull = (int)travelStepsExact;
 
         //move axis when ready to move at least 1 step
-        if (abs((int)stepsTravel) > 1){
-            ESP_LOGI(TAG, "MOVING %d steps",(int)stepsTravel);
-            travelSteps((int)stepsTravel);
-            while(step.getState() != 1) vTaskDelay(2); //wait for move to finish
-            encStepsPrev = encStepsNow; //update length
+        if (abs(travelStepsFull) > 1){
+            travelStepsPartial = fmod(travelStepsExact, 1); //save remaining partial steps to be added in the next iteration
+            ESP_LOGD(TAG, "cablelen=%.2lf, turns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial);
+            ESP_LOGI(TAG, "MOVING %d steps", travelStepsFull);
+            //TODO: calculate variable speed for smoother movement? for example intentionally lag behind and calculate speed according to buffered data
+            step.setSpeedMm(35, 100, 50);
+            //testing: get speed from poti
+            //step.setSpeedMm(35, 1000*potiModifier+1, 1000*potiModifier+1);
+            travelSteps(travelStepsExact);
+            encStepsPrev = encStepsNow; //update previous length
         }
         else {
             //TODO use encoder queue to only run this check at encoder event?
-            vTaskDelay(5);
+            vTaskDelay(2);
         }
     }
 }
