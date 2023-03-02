@@ -10,3 +10,6 @@ build
 
 # freecad backup files
 *.FCStd1
+
+# kicad backup files
+pcb/*/*backups/

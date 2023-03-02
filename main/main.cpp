@@ -86,14 +86,19 @@ extern "C" void app_main()
     esp_log_level_set("buzzer", ESP_LOG_ERROR);
     esp_log_level_set("switches-analog", ESP_LOG_WARN);
     esp_log_level_set("control", ESP_LOG_INFO);
-    esp_log_level_set("stepper", ESP_LOG_INFO);
+    esp_log_level_set("stepper", ESP_LOG_DEBUG);
+    esp_log_level_set("Dendostepper", ESP_LOG_WARN); //stepper lib
+    esp_log_level_set("calc", ESP_LOG_WARN); //stepper lib
 
 #ifdef STEPPER_TEST
     //create task for stepper testing
-    xTaskCreate(task_stepper_test, "task_stepper-test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+    xTaskCreate(task_stepper_test, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
 #else
     //create task for controlling the machine
     xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+
+    //create task for controlling the machine
+    xTaskCreate(task_stepper_ctl, "task_stepper_ctl", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
 
     //create task for handling the buzzer
     xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);
