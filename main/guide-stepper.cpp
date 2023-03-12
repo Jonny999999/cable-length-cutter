@@ -50,6 +50,7 @@ static DendoStepper step;
 static const char *TAG = "stepper"; //tag for logging
 
 static bool stepp_direction = true;
+static bool dir = true, dirPrev; //TODO local variables in travelSteps?
 static uint32_t posNow = 0;
 
 
@@ -65,13 +66,23 @@ void travelSteps(int stepsTarget){
     stepsToGo = abs(stepsTarget);
     if(stepsTarget < 0) stepp_direction = !stepp_direction; //invert direction in reverse mode
 
+    
     while (stepsToGo != 0){
+
+        //--- wait if direction changed ---
+        if (dirPrev != dir){
+                ESP_LOGI(TAG, " dir-change detected - waiting for move to finish \n ");
+                while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
+        }
+
         //--- currently moving right ---
         if (stepp_direction == true){               //currently moving right
             remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
             if (stepsToGo > remaining){             //new distance will exceed limit
                 step.runAbs (POS_MAX_STEPS);        //move to limit
-                while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
+                dirPrev = dir;
+                dir = 1;
+                //while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
                 posNow = POS_MAX_STEPS;
                 stepp_direction = false;            //change current direction for next iteration
                 stepsToGo = stepsToGo - remaining;  //decrease target length by already traveled distance
@@ -79,7 +90,10 @@ void travelSteps(int stepsTarget){
             }
             else {                                  //target distance does not reach the limit
                 step.runAbs (posNow + stepsToGo);   //move by (remaining) distance to reach target length
-                while(step.getState() != 1) vTaskDelay(1); //wait for move to finish
+                dirPrev = dir;
+                dir = 1;
+                //-- dont wait for move to finish since moves in same direction get merged --
+                //while(step.getState() != 1) vTaskDelay(1); //wait for move to finish
                 ESP_LOGD(TAG, "moving to %d\n", posNow+stepsToGo);
                 posNow += stepsToGo;
                 stepsToGo = 0;                      //finished, reset target length (could as well exit loop/break)
@@ -91,7 +105,9 @@ void travelSteps(int stepsTarget){
             remaining = posNow - POS_MIN_STEPS;
             if (stepsToGo > remaining){
                 step.runAbs (POS_MIN_STEPS);
-                while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
+                dirPrev = dir;
+                dir = 0;
+                //while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
                 posNow = POS_MIN_STEPS;
                 stepp_direction = true;
                 stepsToGo = stepsToGo - remaining;
@@ -99,7 +115,10 @@ void travelSteps(int stepsTarget){
             }
             else {
                 step.runAbs (posNow - stepsToGo);           //when moving left the coordinate has to be decreased
-                while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
+                dirPrev = dir;
+                dir = 0;
+                //-- dont wait for move to finish since moves in same direction get merged --
+                //while(step.getState() != 1) vTaskDelay(2);  //wait for move to finish
                 ESP_LOGD(TAG, "moving to %d\n", posNow - stepsToGo);
                 posNow -= stepsToGo;
                 stepsToGo = 0;

@@ -94,6 +94,9 @@ typedef struct
     float dec = 100;        // decceleration in rad*second^-2
     uint32_t accSteps = 0;
     uint32_t decSteps = 0;
+    int32_t stepsRemaining = 0;
+    uint64_t posActual = 0; //actual current pos incremented at every step
+    uint8_t statusPrev = DISABLED; //FIXME currently unused
     uint8_t status = DISABLED;
     bool dir = CW;
     bool runInfinite = false;
@@ -207,6 +210,9 @@ public:
      *  @param accT deceleration time in ms
      */
     void setSpeedMm(uint32_t speed, uint16_t accT, uint16_t decT);
+
+    //CUSTOM: change speed while running
+    void changeSpeedMm(uint32_t speed);
 
     /**
      * @brief Set steps per 1 mm of linear movement
