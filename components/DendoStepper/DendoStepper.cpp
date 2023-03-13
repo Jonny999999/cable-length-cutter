@@ -55,6 +55,9 @@ void DendoStepper::init(uint8_t stepP, uint8_t dirP, uint8_t enP, timer_group_t 
 
 void DendoStepper::init()
 {
+    ESP_LOGW("DendoStepper", "semaphore init");
+    semaphore_isrVariables = xSemaphoreCreateBinary();
+    xSemaphoreGive(semaphore_isrVariables);
     uint64_t mask = (1ULL << conf.stepPin) | (1ULL << conf.dirPin) | (1ULL << conf.enPin); // put output gpio pins in bitmask
     gpio_config_t gpio_conf = {
         // config gpios
@@ -120,18 +123,19 @@ esp_err_t DendoStepper::runPos(int32_t relative)
     if (ctrl.status == DISABLED) // if motor is disabled, enable it
         enableMotor();
 
+    bool newDir = (relative < 0); // CCW if <0, else set CW
+    printf("runpos start -- steps: %d, remaining: %d, status: %d, olddir: %d, newdir: %d\n", relative, ctrl.stepsRemaining, ctrl.status, ctrl.dir, newDir);
     if (!relative) // why would u call it with 0 wtf
         return ESP_ERR_NOT_SUPPORTED;
 
     if (ctrl.status > IDLE) { //currently moving
-        bool newDir = (relative < 0); // CCW if <0, else set CW
         if (ctrl.dir == newDir){ //current direction is the same
-            ctrl.statusPrev = ctrl.status; //update previous status
+            //ctrl.statusPrev = ctrl.status; //update previous status
             ctrl.status = ctrl.status==COAST ? COAST : ACC; //stay at coast otherwise switch to ACC
-            xSemaphoreTake(semaphore_isrVariables, portMAX_DELAY);
+            ctrl.stepsRemaining = ctrl.stepsToGo - ctrl.stepCnt; 
             calc(abs(relative + ctrl.stepsRemaining)); //calculate new velolcity profile for new+remaining steps
             ESP_LOGW("DendoStepper", "EXTEND running movement (stepsRemaining: %d + stepsNew: %d)", ctrl.stepsRemaining, relative);
-            xSemaphoreGive(semaphore_isrVariables);
+    ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
         } else { //direction has changed
                  //direction change not supported TODO wait for decel finish / queue?
             STEP_LOGE("DendoStepper", "DIRECTION HOT-CHANGE NOT SUPPORTED - Finising previous move, this command will be ignored");
@@ -139,17 +143,16 @@ esp_err_t DendoStepper::runPos(int32_t relative)
         }
     }
     else { //current state is IDLE
-        ctrl.statusPrev = ctrl.status; //update previous status
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = ACC;
         setDir(relative < 0); // set CCW if <0, else set CW
         calc(abs(relative));                                                                         // calculate velocity profile
+    ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
+    ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
     }
 
+    printf("runpos end -- steps: %d, status: %d, olddir: %d, newdir: %d\n", relative, ctrl.status, ctrl.dir, newDir);
     currentPos += relative; //(target position / not actual)
-    ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
-                                                                                                 //TODO timer has to be stopped before update if already running?
-    ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
-
     return ESP_OK;
 }
 
@@ -164,13 +167,13 @@ esp_err_t DendoStepper::runPosMm(int32_t relative)
 
 esp_err_t DendoStepper::runAbs(uint32_t position)
 {
-    if (getState() > IDLE) // we are already moving, so stop it
-        stop();
-    while (getState() > IDLE)
-    {
-        // waiting for idle, watchdog should take care of inf loop if it occurs
-        vTaskDelay(1);
-    } // shouldnt take long tho
+    //if (getState() > IDLE) // we are already moving, so stop it
+    //    stop();
+    //while (getState() > IDLE)
+    //{
+    //    // waiting for idle, watchdog should take care of inf loop if it occurs
+    //    vTaskDelay(1);
+    //} // shouldnt take long tho
 
     if (position == currentPos) // we cant go anywhere
         return 0;
@@ -309,7 +312,7 @@ void DendoStepper::stop()
     }
     ctrl.runInfinite = false;
     timer_pause(conf.timer_group, conf.timer_idx); // stop the timer
-    ctrl.statusPrev = ctrl.status; //update previous status
+    //ctrl.statusPrev = ctrl.status; //update previous status
     ctrl.status = IDLE;
     ctrl.stepCnt = 0;
     gpio_set_level((gpio_num_t)conf.stepPin, 0);
@@ -344,15 +347,15 @@ bool DendoStepper::xISR()
     //}
     
     //CUSTOM: track remaining steps for eventually resuming
-    xSemaphoreTake(semaphore_isrVariables, portMAX_DELAY);
-    ctrl.stepsRemaining = ctrl.stepCnt - ctrl.stepCnt; 
-    xSemaphoreGive(semaphore_isrVariables);
+    //xSemaphoreTake(semaphore_isrVariables, portMAX_DELAY);
+    //ctrl.stepsRemaining = ctrl.stepCnt - ctrl.stepCnt; 
+    //xSemaphoreGive(semaphore_isrVariables);
 
     // we are done
     if (ctrl.stepsToGo == ctrl.stepCnt && !ctrl.runInfinite)
     {
         timer_pause(conf.timer_group, conf.timer_idx); // stop the timer
-        ctrl.statusPrev = ctrl.status; //update previous status
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = IDLE;
         ctrl.stepCnt = 0;
         return 0;
@@ -361,19 +364,19 @@ bool DendoStepper::xISR()
     if (ctrl.stepCnt > 0 && ctrl.stepCnt < ctrl.accEnd)
     { // we are accelerating
         ctrl.currentSpeed += ctrl.accInc;
-        ctrl.statusPrev = ctrl.status; //update previous status
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = ACC; // we are accelerating, note that*/
     }
     else if (ctrl.stepCnt > ctrl.coastEnd && !ctrl.runInfinite)
     { // we must be deccelerating then
         ctrl.currentSpeed -= ctrl.decInc;
-        ctrl.statusPrev = ctrl.status; //update previous status
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = DEC; // we are deccelerating
     }
     else
     {
         ctrl.currentSpeed = ctrl.targetSpeed;
-        ctrl.statusPrev = ctrl.status; //update previous status
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = COAST; // we are coasting
     }
 
@@ -381,12 +384,14 @@ bool DendoStepper::xISR()
     // set alarm to calculated interval and disable pin
     GPIO.out_w1tc = (1ULL << conf.stepPin);
     timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval);
-    ctrl.stepCnt++;
     return 1;
 }
 
 void DendoStepper::calc(uint32_t targetSteps)
 {
+    //CUSTOM reset counter if already moving
+    ctrl.stepCnt = 0;
+
     //steps from ctrl.speed -> 0:
     ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
     //steps from 0 -> ctrl.speed:

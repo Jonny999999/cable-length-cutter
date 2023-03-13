@@ -23,7 +23,7 @@ extern "C"
 #define STEPPER_TEST_TRAVEL 65     //mm
                                    //
 #define MIN_MM 0
-#define MAX_MM 60 
+#define MAX_MM 110 //60
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
@@ -31,10 +31,11 @@ extern "C"
 #define SPEED_MIN 2.0   //mm/s
 #define SPEED_MAX 60.0 //mm/s
 
-#define ACCEL_MS 100.0  //ms from 0 to max
-#define DECEL_MS 90.0   //ms from max to 0
+#define SPEED 10 //35, 100, 50 rev
+#define ACCEL_MS 600.0  //ms from 0 to max
+#define DECEL_MS 1000.0   //ms from max to 0
 
-#define STEPPER_STEPS_PER_ROT 800
+#define STEPPER_STEPS_PER_ROT 1600
 #define STEPPER_STEPS_PER_MM STEPPER_STEPS_PER_ROT/4
 
 #define D_CABLE 6
@@ -252,7 +253,7 @@ void task_stepper_ctl(void *pvParameter)
             ESP_LOGD(TAG, "cablelen=%.2lf, turns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial);
             ESP_LOGI(TAG, "MOVING %d steps", travelStepsFull);
             //TODO: calculate variable speed for smoother movement? for example intentionally lag behind and calculate speed according to buffered data
-            step.setSpeedMm(35, 100, 50);
+            step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
             //testing: get speed from poti
             //step.setSpeedMm(35, 1000*potiModifier+1, 1000*potiModifier+1);
             travelSteps(travelStepsExact);
