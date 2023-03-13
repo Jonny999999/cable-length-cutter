@@ -130,7 +130,7 @@ esp_err_t DendoStepper::runPos(int32_t relative)
         return ESP_ERR_NOT_SUPPORTED;
 
     if (ctrl.status > IDLE) { //currently moving
-        ctrl.status = ctrl.status==COAST ? COAST : ACC; //stay at coast otherwise switch to ACC
+        //ctrl.status = ctrl.status==COAST ? COAST : ACC; //stay at coast otherwise switch to ACC
         ctrl.stepsRemaining = ctrl.stepsToGo - ctrl.stepCnt; 
         calc(abs(relative + ctrl.stepsRemaining)); //calculate new velolcity profile for new+remaining steps
         ESP_LOGW("DendoStepper", "EXTEND running movement (stepsRemaining: %d + stepsNew: %d)", ctrl.stepsRemaining, relative);
@@ -420,5 +420,7 @@ void DendoStepper::calc(uint32_t targetSteps)
     ctrl.stepInterval = TIMER_F / ctrl.currentSpeed;
     ctrl.stepsToGo = targetSteps;
 
+    printf("CALC: speedNow=%.1f, speedTarget=%.1f, accEnd=%d, coastEnd=%d,  accSteps=%d, accInc=%.3f\n",
+            ctrl.currentSpeed, ctrl.targetSpeed, ctrl.accEnd, ctrl.coastEnd, ctrl.accSteps, ctrl.accInc);
     STEP_LOGI("calc", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
 }
