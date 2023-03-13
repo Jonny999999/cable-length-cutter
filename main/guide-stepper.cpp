@@ -71,10 +71,10 @@ void travelSteps(int stepsTarget){
     while (stepsToGo != 0){
 
         //--- wait if direction changed ---
-        if (dirPrev != dir){
-                ESP_LOGW(TAG, " dir-change detected - waiting for move to finish \n ");
-                while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
-        }
+        //if (dirPrev != dir){
+        //        ESP_LOGW(TAG, " dir-change detected - waiting for move to finish \n ");
+        //        while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
+        //}
 
         //--- currently moving right ---
         if (stepp_direction == true){               //currently moving right
