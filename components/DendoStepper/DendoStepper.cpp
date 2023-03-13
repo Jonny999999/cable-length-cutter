@@ -128,10 +128,13 @@ esp_err_t DendoStepper::runPos(int32_t relative)
         if (ctrl.dir == newDir){ //current direction is the same
             ctrl.statusPrev = ctrl.status; //update previous status
             ctrl.status = ctrl.status==COAST ? COAST : ACC; //stay at coast otherwise switch to ACC
+            xSemaphoreTake(semaphore_isrVariables, portMAX_DELAY);
             calc(abs(relative + ctrl.stepsRemaining)); //calculate new velolcity profile for new+remaining steps
+            ESP_LOGW("DendoStepper", "EXTEND running movement (stepsRemaining: %d + stepsNew: %d)", ctrl.stepsRemaining, relative);
+            xSemaphoreGive(semaphore_isrVariables);
         } else { //direction has changed
                  //direction change not supported TODO wait for decel finish / queue?
-            STEP_LOGW("DendoStepper", "DIRECTION HOT-CHANGE NOT SUPPORTED - Finising previous move, this command will be ignored");
+            STEP_LOGE("DendoStepper", "DIRECTION HOT-CHANGE NOT SUPPORTED - Finising previous move, this command will be ignored");
             return ESP_ERR_NOT_SUPPORTED;
         }
     }
@@ -333,14 +336,17 @@ bool DendoStepper::xISR()
 
     ctrl.stepCnt++;
 
-    //CUSTOM: track actual precice current position
-    if (ctrl.dir) {
-        ctrl.posActual ++;
-    } else {
-        ctrl.posActual --;
-    }
+    ////CUSTOM: track actual precice current position
+    //if (ctrl.dir) {
+    //    ctrl.posActual ++;
+    //} else {
+    //    ctrl.posActual --;
+    //}
+    
     //CUSTOM: track remaining steps for eventually resuming
+    xSemaphoreTake(semaphore_isrVariables, portMAX_DELAY);
     ctrl.stepsRemaining = ctrl.stepCnt - ctrl.stepCnt; 
+    xSemaphoreGive(semaphore_isrVariables);
 
     // we are done
     if (ctrl.stepsToGo == ctrl.stepCnt && !ctrl.runInfinite)

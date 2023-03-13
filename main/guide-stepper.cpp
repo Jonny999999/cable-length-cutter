@@ -34,7 +34,7 @@ extern "C"
 #define ACCEL_MS 100.0  //ms from 0 to max
 #define DECEL_MS 90.0   //ms from max to 0
 
-#define STEPPER_STEPS_PER_ROT 1600
+#define STEPPER_STEPS_PER_ROT 800
 #define STEPPER_STEPS_PER_MM STEPPER_STEPS_PER_ROT/4
 
 #define D_CABLE 6
@@ -71,7 +71,7 @@ void travelSteps(int stepsTarget){
 
         //--- wait if direction changed ---
         if (dirPrev != dir){
-                ESP_LOGI(TAG, " dir-change detected - waiting for move to finish \n ");
+                ESP_LOGW(TAG, " dir-change detected - waiting for move to finish \n ");
                 while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
         }
 
@@ -235,6 +235,8 @@ void task_stepper_ctl(void *pvParameter)
         //read potentiometer and normalize (0-1) to get a variable for testing
         potiModifier = (float) gpio_readAdc(ADC_CHANNEL_POTI) / 4095; //0-4095 -> 0-1
         //ESP_LOGI(TAG, "current poti-modifier = %f", potiModifier);
+        ESP_LOGI(TAG, "delaying stepper-ctl task by %.1f ms (poti value)", 2000 * potiModifier);
+        vTaskDelay(2000 * potiModifier / portTICK_PERIOD_MS);
 
         //calculate steps to move
         cableLen = (double)encStepsDelta * 1000 / ENCODER_STEPS_PER_METER;

@@ -29,6 +29,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "math.h"
+#include "freertos/semphr.h"
 
 //#define STEP_DEBUG
 
@@ -95,7 +96,7 @@ typedef struct
     uint32_t accSteps = 0;
     uint32_t decSteps = 0;
     int32_t stepsRemaining = 0;
-    uint64_t posActual = 0; //actual current pos incremented at every step
+    //uint64_t posActual = 0; //actual current pos incremented at every step
     uint8_t statusPrev = DISABLED; //FIXME currently unused
     uint8_t status = DISABLED;
     bool dir = CW;
@@ -111,6 +112,7 @@ private:
     ctrl_var_t ctrl;
     esp_timer_handle_t dyingTimer;
     TaskHandle_t enTask;
+    SemaphoreHandle_t semaphore_isrVariables = NULL;
     uint64_t currentPos = 0; // absolute position
     bool timerStarted = 0;
 
