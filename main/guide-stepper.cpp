@@ -33,8 +33,8 @@ extern "C"
 #define SPEED_MAX 60.0 //mm/s
 
 #define SPEED 10 //35, 100, 50 rev
-#define ACCEL_MS 1000.0  //ms from 0 to max
-#define DECEL_MS 1000.0   //ms from max to 0
+#define ACCEL_MS 800.0  //ms from 0 to max
+#define DECEL_MS 800.0   //ms from max to 0
 
 #define STEPPER_STEPS_PER_ROT 1600
 #define STEPPER_STEPS_PER_MM STEPPER_STEPS_PER_ROT/4
@@ -219,19 +219,21 @@ void task_stepper_test(void *pvParameter)
 		SW_AUTO_CUT.handle();
 
 		if (SW_RESET.risingEdge) {
+			ESP_LOGI(TAG, "button - stop stepper\n ");
 			buzzer.beep(1, 1000, 100);
 			step.stop();
-			ESP_LOGI(TAG, "button - stop stepper\n ");
 		}
 		if (SW_PRESET1.risingEdge) {
-			buzzer.beep(2, 300, 100);
-			step.runPosMm(30);
 			ESP_LOGI(TAG, "button - moving right\n ");
+			buzzer.beep(2, 300, 100);
+			step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
+			step.runPosMm(15);
 		}
 		if (SW_PRESET3.risingEdge) {
-			buzzer.beep(1, 500, 100);
-			step.runPosMm(-30);
 			ESP_LOGI(TAG, "button - moving left\n ");
+			buzzer.beep(1, 500, 100);
+			step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
+			step.runPosMm(-15);
 		}
 		if (SW_PRESET2.risingEdge) {
 			buzzer.beep(1, 100, 100);

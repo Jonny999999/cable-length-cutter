@@ -132,15 +132,15 @@ esp_err_t DendoStepper::runPos(int32_t relative)
     if (ctrl.status > IDLE) { //currently moving
         //ctrl.status = ctrl.status==COAST ? COAST : ACC; //stay at coast otherwise switch to ACC
         ctrl.stepsRemaining = ctrl.stepsToGo - ctrl.stepCnt; 
-        calc(abs(relative + ctrl.stepsRemaining)); //calculate new velolcity profile for new+remaining steps
-        ESP_LOGW("DendoStepper", "EXTEND running movement (stepsRemaining: %d + stepsNew: %d)", ctrl.stepsRemaining, relative);
+        calc(abs(relative) + ctrl.stepsRemaining); //calculate new velolcity profile for new+remaining steps
+        ESP_LOGW("DendoStepper", "EXTEND running movement (stepsRemaining: %d + stepsNew: %d  - current state: %d)", ctrl.stepsRemaining, abs(relative), (int)ctrl.status);
         ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
     }
 
     else { //current state is IDLE
            //ctrl.statusPrev = ctrl.status; //update previous status
-        ctrl.status = ACC;
         calc(abs(relative));                                                                         // calculate velocity profile
+        ctrl.status = ACC;
         ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
         ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
     }
@@ -388,8 +388,16 @@ bool DendoStepper::xISR()
 
 void DendoStepper::calc(uint32_t targetSteps)
 {
+	//only set initial speed if IDLE
+	if(ctrl.status == 1){
+		ctrl.currentSpeed = 0;
+		ESP_LOGD("DendoStepper", "calc-start: reset speed to 0 (start from idle) %lf\n", ctrl.currentSpeed);
+	}
+	else{
+		ESP_LOGD("DendoStepper", "calc start: NOT resetting speed (extend from ACC/DEC/COAST): %lf\n", ctrl.currentSpeed);
+	}
     //CUSTOM reset counter if already moving
-    ctrl.stepCnt = 0;
+    ctrl.stepCnt = 0; //FIXME bugs when set 0 while ISR reads/runs? mutex
 
     //steps from ctrl.speed -> 0:
     ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
@@ -397,6 +405,7 @@ void DendoStepper::calc(uint32_t targetSteps)
     //ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
     //steps from ctrl.currentSpeed -> ctrl.speed:
     ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc)  * (ctrl.speed - ctrl.currentSpeed) / ctrl.speed;
+	ESP_LOGD("DendoStepper", "accSteps: %d  currspeed: %lf,  ctrlSpeed: %lf\n", ctrl.accSteps, ctrl.currentSpeed,  ctrl.speed);
 
     if (targetSteps < (ctrl.decSteps + ctrl.accSteps))
     {
@@ -415,12 +424,21 @@ void DendoStepper::calc(uint32_t targetSteps)
     ctrl.accInc = (ctrl.targetSpeed - ctrl.currentSpeed) / (double)ctrl.accSteps;
     ctrl.decInc = ctrl.targetSpeed / (double)ctrl.decSteps;
 
-    ctrl.currentSpeed = ctrl.accInc;
+	//only set initial speed if IDLE
+	if(ctrl.status == 1){
+		ctrl.currentSpeed = ctrl.accInc;
+		ESP_LOGD("DendoStepper", "`reset curr speeed to accinc: %lf\n", ctrl.currentSpeed);
+		ESP_LOGD("DendoStepper", "status=%d setting speed to initial value: %lf\n",ctrl.status, ctrl.currentSpeed);
+	}
+	else{
+		ESP_LOGD("DendoStepper", "status=%d NOT resetting speed to initial value %lf\n",ctrl.status, ctrl.currentSpeed);
+	}
 
     ctrl.stepInterval = TIMER_F / ctrl.currentSpeed;
     ctrl.stepsToGo = targetSteps;
 
-    printf("CALC: speedNow=%.1f, speedTarget=%.1f, accEnd=%d, coastEnd=%d,  accSteps=%d, accInc=%.3f\n",
+	ESP_LOGD("DendoStepper", "DEBUG: accSteps: %d  currspeed: %lf,  ctrlSpeed: %lf\n", ctrl.accSteps, ctrl.currentSpeed,  ctrl.speed);
+    ESP_LOGD("DendoStepper", "CALC: speedNow=%.1f, speedTarget=%.1f, accEnd=%d, coastEnd=%d,  accSteps=%d, accInc=%.3f\n",
             ctrl.currentSpeed, ctrl.targetSpeed, ctrl.accEnd, ctrl.coastEnd, ctrl.accSteps, ctrl.accInc);
     STEP_LOGI("calc", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
 }
