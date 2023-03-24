@@ -99,10 +99,10 @@ extern "C" void app_main()
 
     //create task for controlling the machine
     xTaskCreate(task_stepper_ctl, "task_stepper_ctl", configMINIMAL_STACK_SIZE * 5, NULL, 5, NULL);
+#endif
 
     //create task for handling the buzzer
     xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);
-#endif
 
     //beep at startup
     buzzer.beep(3, 70, 50);

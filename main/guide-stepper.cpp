@@ -11,6 +11,7 @@ extern "C"
 #include "config.hpp"
 #include "guide-stepper.hpp"
 #include "encoder.hpp"
+#include "gpio_evaluateSwitch.hpp"
 
 
 
@@ -32,7 +33,7 @@ extern "C"
 #define SPEED_MAX 60.0 //mm/s
 
 #define SPEED 10 //35, 100, 50 rev
-#define ACCEL_MS 600.0  //ms from 0 to max
+#define ACCEL_MS 1000.0  //ms from 0 to max
 #define DECEL_MS 1000.0   //ms from max to 0
 
 #define STEPPER_STEPS_PER_ROT 1600
@@ -188,18 +189,55 @@ void task_stepper_test(void *pvParameter)
 {
     init_stepper();
     home();
+    step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
+	//--- move from left to right repeatedly ---
+    // while (1) {
+    //     updateSpeedFromAdc();
+    //     step.runPosMm(STEPPER_TEST_TRAVEL);
+    //     while(step.getState() != 1) vTaskDelay(2);
+    //     ESP_LOGI(TAG, "finished moving right => moving left");
 
-    while (1) {
-        updateSpeedFromAdc();
-        step.runPosMm(STEPPER_TEST_TRAVEL);
-        while(step.getState() != 1) vTaskDelay(2);
-        ESP_LOGI(TAG, "finished moving right => moving left");
+    //  10updateSpeedFromAdc();
+    //     step.runPosMm(-STEPPER_TEST_TRAVEL);
+    //     while(step.getState() != 1) vTaskDelay(2); //1=idle
+    //     ESP_LOGI(TAG, "finished moving left => moving right");
+    // }
 
-        updateSpeedFromAdc();
-        step.runPosMm(-STEPPER_TEST_TRAVEL);
-        while(step.getState() != 1) vTaskDelay(2); //1=idle
-        ESP_LOGI(TAG, "finished moving left => moving right");
-    }
+	//--- control stepper using preset buttons ---
+	while(1){
+		vTaskDelay(20 / portTICK_PERIOD_MS);
+
+		//------ handle switches ------
+		//run handle functions for all switches
+		SW_START.handle();
+		SW_RESET.handle();
+		SW_SET.handle();
+		SW_PRESET1.handle();
+		SW_PRESET2.handle();
+		SW_PRESET3.handle();
+		SW_CUT.handle();
+		SW_AUTO_CUT.handle();
+
+		if (SW_RESET.risingEdge) {
+			buzzer.beep(1, 1000, 100);
+			step.stop();
+			ESP_LOGI(TAG, "button - stop stepper\n ");
+		}
+		if (SW_PRESET1.risingEdge) {
+			buzzer.beep(2, 300, 100);
+			step.runPosMm(30);
+			ESP_LOGI(TAG, "button - moving right\n ");
+		}
+		if (SW_PRESET3.risingEdge) {
+			buzzer.beep(1, 500, 100);
+			step.runPosMm(-30);
+			ESP_LOGI(TAG, "button - moving left\n ");
+		}
+		if (SW_PRESET2.risingEdge) {
+			buzzer.beep(1, 100, 100);
+			ESP_LOGW(TAG, "button - current state: %d\n, pos: %llu", (int)step.getState(), step.getPositionMm());
+		}
+	}
 }
 
 
