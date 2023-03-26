@@ -34,7 +34,7 @@ extern "C"
 
 #define SPEED 10 //35, 100, 50 rev
 #define ACCEL_MS 800.0  //ms from 0 to max
-#define DECEL_MS 800.0   //ms from max to 0
+#define DECEL_MS 500.0   //ms from max to 0
 
 #define STEPPER_STEPS_PER_ROT 1600
 #define STEPPER_STEPS_PER_MM STEPPER_STEPS_PER_ROT/4

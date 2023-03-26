@@ -174,7 +174,7 @@ esp_err_t DendoStepper::runAbs(uint32_t position)
         bool newDir = (relativeSteps < 0); // CCW if <0, else set CW
         if (ctrl.dir != newDir){ //direction differs 
             STEP_LOGE("DendoStepper", "DIRECTION HOT-CHANGE NOT SUPPORTED - Waiting for move to finish...");
-            while (getState() > IDLE) vTaskDelay(1); //wait for move to finish
+            while (getState() > IDLE) vTaskDelay(5); //wait for move to finish
         }
     }
 
@@ -401,6 +401,7 @@ void DendoStepper::calc(uint32_t targetSteps)
 
     //steps from ctrl.speed -> 0:
     ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
+	ESP_LOGD("DendoStepper", "decSteps: %d  currspeed: %lf,  ctrlSpeed: %lf\n", ctrl.decSteps, ctrl.currentSpeed,  ctrl.speed);
     //steps from 0 -> ctrl.speed:
     //ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
     //steps from ctrl.currentSpeed -> ctrl.speed:
@@ -437,8 +438,11 @@ void DendoStepper::calc(uint32_t targetSteps)
     ctrl.stepInterval = TIMER_F / ctrl.currentSpeed;
     ctrl.stepsToGo = targetSteps;
 
-	ESP_LOGD("DendoStepper", "DEBUG: accSteps: %d  currspeed: %lf,  ctrlSpeed: %lf\n", ctrl.accSteps, ctrl.currentSpeed,  ctrl.speed);
-    ESP_LOGD("DendoStepper", "CALC: speedNow=%.1f, speedTarget=%.1f, accEnd=%d, coastEnd=%d,  accSteps=%d, accInc=%.3f\n",
+	//debug log output
+	ESP_LOGD("DendoStepper", "accSteps: %d,  accInc: %lf, decSteps: %d, decInc: %lf", 
+			ctrl.accSteps, ctrl.accInc, ctrl.decSteps, ctrl.decInc);
+    ESP_LOGD("DendoStepper", "speedNow=%.1f, speedTarget=%.1f, accEnd=%d, coastEnd=%d,  accSteps=%d, accInc=%.3f\n",
             ctrl.currentSpeed, ctrl.targetSpeed, ctrl.accEnd, ctrl.coastEnd, ctrl.accSteps, ctrl.accInc);
-    STEP_LOGI("calc", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
+    ESP_LOGD("DendoStepper", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u",
+			ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
 }
