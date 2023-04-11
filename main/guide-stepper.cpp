@@ -188,15 +188,15 @@ void task_stepper_test(void *pvParameter)
 		}
 		if (SW_PRESET1.risingEdge) {
 			buzzer.beep(2, 300, 100);
-			stepper_setTargetSteps(100);
+			stepper_setTargetSteps(1000);
 		}
 		if (SW_PRESET2.risingEdge) {
 			buzzer.beep(1, 500, 100);
-			stepper_setTargetSteps(1000);
+			stepper_setTargetSteps(10000);
 		}
 		if (SW_PRESET3.risingEdge) {
 			buzzer.beep(1, 100, 100);
-			stepper_setTargetSteps(6000);
+			stepper_setTargetSteps(60000);
 		}
 	}
 }

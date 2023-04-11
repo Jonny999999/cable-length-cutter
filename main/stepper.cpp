@@ -19,6 +19,7 @@ extern "C" {
 
 static const char *TAG = "stepper-ctl"; //tag for logging
 bool direction = 0;
+bool timerIsRunning = false;
 
 bool timer_isr(void *arg);
 
@@ -43,21 +44,36 @@ StepperControl ctrl;  // Create an instance of StepperControl struct
 
 
 
-void stepper_setTargetSteps(int steps){
-	ESP_LOGW(TAG, "set target steps to %d", steps);
+void stepper_setTargetSteps(int target_steps) {
+	ESP_LOGW(TAG, "set target steps to %d", target_steps);
 	//TODO switch dir pin in isr? not in sync with count
-	if(steps < 0){
-		gpio_set_level(ctrl.directionPin, 1);
-	} else {
-		gpio_set_level(ctrl.directionPin, 0);
-	}
+	//TODO switch direction using negative values as below
+//	if(target_steps < 0){
+//		gpio_set_level(ctrl.directionPin, 1);
+//	} else {
+//		gpio_set_level(ctrl.directionPin, 0);
+//	}
+	ESP_LOGW(TAG, "toggle direction -> %d", direction);
+	
 
-	ctrl.targetSteps = abs(steps);
+  // Update the targetSteps value
+  ctrl.targetSteps = abs(target_steps);
+
+  // Check if the timer is currently paused
+  if (!timerIsRunning){
+    // If the timer is paused, start it again with the updated targetSteps
+    timer_set_alarm_value(ctrl.timerGroup, ctrl.timerIdx, 1000);
+    timer_set_counter_value(ctrl.timerGroup, ctrl.timerIdx, 1000);
+    timer_start(ctrl.timerGroup, ctrl.timerIdx);
+	ESP_LOGW(TAG, "STARTED TIMER");
+  }
 }
+
+
 
 void stepper_toggleDirection(){
 	direction = !direction;
-	gpio_set_level(ctrl.directionPin, 1);
+	gpio_set_level(ctrl.directionPin, direction);
 	ESP_LOGW(TAG, "toggle direction -> %d", direction);
 }
 
@@ -72,8 +88,8 @@ void stepper_init(){
 	// Set values in StepperControl struct
 	ctrl.targetSteps = 0;
 	ctrl.currentSteps = 0;
-	ctrl.acceleration = 50;
-	ctrl.deceleration = 50;
+	ctrl.acceleration = 100;
+	ctrl.deceleration = 100;
 	ctrl.pulsePin = STEPPER_STEP_PIN;
 	ctrl.directionPin = STEPPER_DIR_PIN;
 	ctrl.timerGroup = TIMER_GROUP_0;
@@ -81,7 +97,7 @@ void stepper_init(){
 	ctrl.isAccelerating = true;
 	ctrl.isDecelerating = false;
 	ctrl.initialSpeed = 0;  // Set initial speed as needed
-	ctrl.targetSpeed = 500;   // Set target speed as needed
+	ctrl.targetSpeed = 500000;   // Set target speed as needed
 	ctrl.currentSpeed = ctrl.initialSpeed;
 
 	// Configure pulse and direction pins as outputs
@@ -116,6 +132,7 @@ bool timer_isr(void *arg) {
 	// Cast arg_val to timer_idx_t
 	timer_idx_t timer_idx = (timer_idx_t)arg_val;
 	int32_t step_diff = ctrl.targetSteps - ctrl.currentSteps;
+	timerIsRunning = true;
 
 	if (timer_idx == ctrl.timerIdx) {
 		if (ctrl.currentSteps < ctrl.targetSteps) {
@@ -129,9 +146,11 @@ bool timer_isr(void *arg) {
 					ctrl.isAccelerating = false;
 				}
 			}
+			//FIXME controller crashes when finished accelerating
+			//Guru Meditation Error: Core  0 panic'ed (Interrupt wdt timeout on CPU0).
 
 			// Check if decelerating
-			if (ctrl.isDecelerating) {
+			if (ctrl.isDecelerating) { //FIXME isDecelerating is never set???
 				if (ctrl.currentSpeed > ctrl.targetSpeed) {
 					// Decrease speed if not yet at target speed
 					ctrl.currentSpeed -= ctrl.deceleration;
@@ -154,7 +173,8 @@ bool timer_isr(void *arg) {
 		} else {
 			// Reached target step count, stop timer
 			timer_pause(ctrl.timerGroup, ctrl.timerIdx);
-			ESP_LOGW(TAG,"finished, pausing timer");
+			timerIsRunning = false;
+			//ESP_LOGW(TAG,"finished, pausing timer");
 		}
 	}
 	return 1;
