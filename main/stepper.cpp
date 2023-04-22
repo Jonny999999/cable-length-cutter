@@ -2,6 +2,7 @@
 
 #include "config.hpp"
 
+#include <inttypes.h>
 
 //config from config.hpp
 //#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
@@ -11,6 +12,7 @@
 extern "C" {
 #include "driver/timer.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 }
 
 #define TIMER_F 1000000ULL
@@ -22,6 +24,60 @@ bool direction = 0;
 bool timerIsRunning = false;
 
 bool timer_isr(void *arg);
+
+
+
+
+
+//stepper driver in software for testing (no timer/interrupt):
+uint64_t stepsTarget = 0;
+void task_stepperCtrlSw(void *pvParameter)
+{
+	uint64_t stepsNow = 0;
+	int increment = 1;
+
+	while(1){
+		int64_t delta = stepsTarget - stepsNow;
+
+		//at position, nothing to do
+		if (delta == 0){
+			ESP_LOGW(TAG, "delta =0 waiting for change");
+			vTaskDelay(300 / portTICK_PERIOD_MS);
+			continue;
+		}
+
+		//define direction
+		if (delta > 0){
+			gpio_set_level(STEPPER_DIR_PIN, 0);
+			increment = 1;
+		} else {
+			gpio_set_level(STEPPER_DIR_PIN, 1);
+			increment = -1;
+		}
+
+		//do one step
+		//note: triggers watchdog at long movements
+		stepsNow += increment;
+		gpio_set_level(STEPPER_STEP_PIN, 1);
+		ets_delay_us(30);
+		gpio_set_level(STEPPER_STEP_PIN, 0);
+		ets_delay_us(90); //speed
+	}
+}
+
+void stepperSw_setTargetSteps(uint64_t target){
+	stepsTarget = target;
+	char buffer[20];
+	snprintf(buffer, sizeof(buffer), "%" PRIu64, target);
+	ESP_LOGW(TAG, "set target steps to %s", buffer);
+}
+
+
+
+
+
+
+
 
 
 typedef struct {

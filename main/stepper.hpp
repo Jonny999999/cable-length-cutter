@@ -6,6 +6,10 @@ void stepper_setTargetSteps(int steps);
 
 void stepper_toggleDirection();
 
+//control stepper without timer (software)
+void task_stepperCtrlSw(void *pvParameter);
+void stepperSw_setTargetSteps(uint64_t target);
+
 //typedef struct
 //{
 //    uint8_t stepPin;           /** step signal pin */
