@@ -168,6 +168,7 @@ void updateSpeedFromAdc() {
 void task_stepper_test(void *pvParameter)
 {
 	stepper_init();
+	int state = 0;
 	while(1){
 		vTaskDelay(20 / portTICK_PERIOD_MS);
 
@@ -183,21 +184,28 @@ void task_stepper_test(void *pvParameter)
 		SW_AUTO_CUT.handle();
 
 		if (SW_RESET.risingEdge) {
-			stepper_toggleDirection();
-			buzzer.beep(1, 1000, 100);
+			//stepper_toggleDirection();
+			//buzzer.beep(1, 1000, 100);
+			if (state) {
+				stepper_setTargetSteps(1000);
+				state = 0;
+			} else {
+				stepper_setTargetSteps(600);
+				state = 1;
+			}
 		}
-		if (SW_PRESET1.risingEdge) {
-			buzzer.beep(2, 300, 100);
-			stepperSw_setTargetSteps(1000);
-		}
-		if (SW_PRESET2.risingEdge) {
-			buzzer.beep(1, 500, 100);
-			stepperSw_setTargetSteps(10000);
-		}
-		if (SW_PRESET3.risingEdge) {
-			buzzer.beep(1, 100, 100);
-			stepperSw_setTargetSteps(30000);
-		}
+	//	if (SW_PRESET1.risingEdge) {
+	//		buzzer.beep(2, 300, 100);
+	//		stepperSw_setTargetSteps(1000);
+	//	}
+	//	if (SW_PRESET2.risingEdge) {
+	//		buzzer.beep(1, 500, 100);
+	//		stepperSw_setTargetSteps(10000);
+	//	}
+	//	if (SW_PRESET3.risingEdge) {
+	//		buzzer.beep(1, 100, 100);
+	//		stepperSw_setTargetSteps(30000);
+	//	}
 	}
 }
 

@@ -94,7 +94,7 @@ extern "C" void app_main()
 
 #ifdef STEPPER_TEST
     //create task for stepper testing
-    xTaskCreate(task_stepperCtrlSw, "task stepper control software", configMINIMAL_STACK_SIZE * 3, NULL, configMAX_PRIORITIES - 1, NULL);
+    //xTaskCreate(task_stepperCtrlSw, "task stepper control software", configMINIMAL_STACK_SIZE * 3, NULL, configMAX_PRIORITIES - 1, NULL);
     xTaskCreate(task_stepper_test, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
 #else
     //create task for controlling the machine
