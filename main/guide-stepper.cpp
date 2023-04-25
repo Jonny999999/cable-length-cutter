@@ -184,7 +184,6 @@ void task_stepper_test(void *pvParameter)
 		SW_AUTO_CUT.handle();
 
 		if (SW_RESET.risingEdge) {
-			//stepper_toggleDirection();
 			//buzzer.beep(1, 1000, 100);
 			if (state) {
 				stepper_setTargetSteps(1000);

@@ -1,15 +1,8 @@
 //custom driver for stepper motor
-
 #include "config.hpp"
 #include "hal/timer_types.h"
-
 #include <cstdint>
 #include <inttypes.h>
-
-//config from config.hpp
-//#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
-//#define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
-//
 
 extern "C" {
 #include "driver/timer.h"
@@ -17,23 +10,35 @@ extern "C" {
 #include "esp_log.h"
 }
 
+//config from config.hpp
+//#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
+//#define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
+
 #define TIMER_F 1000000ULL
 #define TICK_PER_S TIMER_S
 #define NS_TO_T_TICKS(x) (x)
 
+
+
+//========================
+//=== global variables ===
+//========================
 static const char *TAG = "stepper-ctl"; //tag for logging
+									
 bool direction = 1;
 bool timerIsRunning = false;
-
 bool timer_isr(void *arg);
 
+static timer_group_t timerGroup = TIMER_GROUP_0;
+static timer_idx_t timerIdx = TIMER_0;
+static uint64_t posTarget = 0;
+static uint64_t posNow = 0;
 
-	static timer_group_t timerGroup = TIMER_GROUP_0;
-	static timer_idx_t timerIdx = TIMER_0;
-	static uint64_t posTarget = 0;
-	static uint64_t posNow = 0;
 
 
+//===============================
+//=== software - control task ===
+//===============================
 //stepper driver in software for testing (no timer/interrupt):
 uint64_t stepsTarget = 0;
 void task_stepperCtrlSw(void *pvParameter)
@@ -70,6 +75,9 @@ void task_stepperCtrlSw(void *pvParameter)
 	}
 }
 
+//=================================
+//=== software - set target pos ===
+//=================================
 void stepperSw_setTargetSteps(uint64_t target){
 	stepsTarget = target;
 	char buffer[20];
@@ -83,28 +91,9 @@ void stepperSw_setTargetSteps(uint64_t target){
 
 
 
-
-
-typedef struct {
-	int targetSteps;        // Target step count
-	int currentSteps;       // Current step count
-	int acceleration;      // Acceleration (in steps per second^2)
-	int deceleration;      // Deceleration (in steps per second^2)
-	gpio_num_t pulsePin;           // Pin for pulse signal
-	gpio_num_t directionPin;      // Pin for direction signal
-	timer_group_t timerGroup;        // Timer group
-	timer_idx_t timerIdx;          // Timer index
-	bool isAccelerating;   // Flag to indicate if accelerating
-	bool isDecelerating;   // Flag to indicate if decelerating
-	int initialSpeed;      // Initial speed (in steps per second)
-	int targetSpeed;       // Target speed (in steps per second)
-	int currentSpeed;      // Current speed (in steps per second)
-} StepperControl;
-
-StepperControl ctrl;  // Create an instance of StepperControl struct
-
-
-
+//========================
+//==== set target pos ====
+//========================
 void stepper_setTargetSteps(int target_steps) {
 	ESP_LOGW(TAG, "set target steps from %lld to %d  (stepsNow: %llu", (long long int)posTarget, target_steps, (long long int)posNow);
 	posTarget = target_steps;
@@ -129,40 +118,18 @@ void stepper_setTargetSteps(int target_steps) {
 
 
 
-void stepper_toggleDirection(){
-	direction = !direction;
-	gpio_set_level(ctrl.directionPin, direction);
-	ESP_LOGW(TAG, "toggle direction -> %d", direction);
-}
 
 
-
-
-
-
-
+//========================
+//===== init stepper =====
+//========================
 void stepper_init(){
 	ESP_LOGW(TAG, "init - configure struct...");
-	// Set values in StepperControl struct
-	ctrl.targetSteps = 0;
-	ctrl.currentSteps = 0;
-	ctrl.acceleration = 100;
-	ctrl.deceleration = 100;
-	ctrl.pulsePin = STEPPER_STEP_PIN;
-	ctrl.directionPin = STEPPER_DIR_PIN;
-	ctrl.timerGroup = TIMER_GROUP_0;
-	ctrl.timerIdx = TIMER_0;
-	ctrl.isAccelerating = true;
-	ctrl.isDecelerating = false;
-	ctrl.initialSpeed = 0;  // Set initial speed as needed
-	ctrl.targetSpeed = 500000;   // Set target speed as needed
-	ctrl.currentSpeed = ctrl.initialSpeed;
 
 	// Configure pulse and direction pins as outputs
 	ESP_LOGW(TAG, "init - configure gpio pins...");
-	gpio_set_direction(ctrl.pulsePin, GPIO_MODE_OUTPUT);
-	gpio_set_direction(ctrl.directionPin, GPIO_MODE_OUTPUT);
-
+	gpio_set_direction(STEPPER_DIR_PIN, GPIO_MODE_OUTPUT);
+	gpio_set_direction(STEPPER_STEP_PIN, GPIO_MODE_OUTPUT);
 
 	ESP_LOGW(TAG, "init - initialize/configure timer...");
 	timer_config_t timer_conf = {
@@ -173,27 +140,28 @@ void stepper_init(){
 		.auto_reload = TIMER_AUTORELOAD_EN, // reload pls
 		.divider = 80000000ULL / TIMER_F,   // ns resolution
 	};
-
-
-	ESP_ERROR_CHECK(timer_init(ctrl.timerGroup, ctrl.timerIdx, &timer_conf));                   // init the timer
-	ESP_ERROR_CHECK(timer_set_counter_value(ctrl.timerGroup, ctrl.timerIdx, 0));                // set it to 0
-	//ESP_ERROR_CHECK(timer_isr_callback_add(ctrl.timerGroup, ctrl.timerIdx, timer_isr, )); // add callback fn to run when alarm is triggrd
-	ESP_ERROR_CHECK(timer_isr_callback_add(ctrl.timerGroup, ctrl.timerIdx, timer_isr, (void *)ctrl.timerIdx, 0));
+	ESP_ERROR_CHECK(timer_init(timerGroup, timerIdx, &timer_conf));                   // init the timer
+	ESP_ERROR_CHECK(timer_set_counter_value(timerGroup, timerIdx, 0));                // set it to 0
+	ESP_ERROR_CHECK(timer_isr_callback_add(timerGroup, timerIdx, timer_isr, (void *)timerIdx, 0));
 }
 
 
 
-
+//================================
+//=== timer interrupt function ===
+//================================
 bool timer_isr(void *arg) {
+	// Generate pulse for stepper motor
 	//turn pin on (fast)
 	GPIO.out_w1ts = (1ULL << STEPPER_STEP_PIN);
 
 
-	uint32_t speedTarget = 100000;
-	uint32_t speedMin = 20000;
+	//--- variables ---
+	static uint32_t speedTarget = 100000;
+	static uint32_t speedMin = 20000;
 	//FIXME increment actually has to be re-calculated every run to have linear accel (because also gets called faster/slower)
-	uint32_t decel_increment = 200;
-	uint32_t accel_increment = 150;
+	static uint32_t decel_increment = 200;
+	static uint32_t accel_increment = 150;
 
 	static uint64_t stepsToGo = 0;
 	static uint32_t speedNow = speedMin;
@@ -208,11 +176,9 @@ bool timer_isr(void *arg) {
 	} else {
 		directionTarget = 0;
 	}
-
 	//directionTarget = 1;
 	//direction = 1;
 	//gpio_set_level(STEPPER_DIR_PIN, direction);
-
 	if (direction != directionTarget) {
 		//ESP_LOGW(TAG, "direction differs! new: %d", direction);
 		if (stepsToGo == 0){
@@ -231,13 +197,11 @@ bool timer_isr(void *arg) {
 		stepsToGo = posNow - posTarget;
 		//stepsToGo = abs((int64_t)posTarget - (int64_t)posNow);
 	}
-
 	//TODO fix direction code above currently ony works with the below line instead
 	//stepsToGo = abs((int64_t)posTarget - (int64_t)posNow);
 
 
 	//--- define speed ---
-	//uint64_t stepsAccelRemaining = (speedTarget - speedNow) / accel_increment;
 	uint64_t stepsDecelRemaining = (speedNow - speedMin) / decel_increment;
 
 	if (stepsToGo <= stepsDecelRemaining) {
@@ -273,69 +237,19 @@ bool timer_isr(void *arg) {
 	if (direction == 1){
 		posNow ++;
 	} else {
-		posNow --; //FIXME posNow gets extremely big after second start (underflow?)
+		//prevent underflow FIXME this case should not happen in the first place?
+		if (posNow != 0){
+			posNow --;
+		} else {
+			//ERR posNow would be negative?
+		}
 	}
 
 
 	// Generate pulse for stepper motor
-	//gpio_set_level(STEPPER_STEP_PIN, 1);
-	//ets_delay_us(500);  // Adjust delay as needed
-	//gpio_set_level(STEPPER_STEP_PIN, 0);
-
 	//turn pin off (fast)
 	GPIO.out_w1tc = (1ULL << STEPPER_STEP_PIN);
 
-
-//	// Cast arg to an integer type that has the same size as timer_idx_t
-//	uintptr_t arg_val = (uintptr_t)arg;
-//	// Cast arg_val to timer_idx_t
-//	timer_idx_t timer_idx = (timer_idx_t)arg_val;
-//	int32_t step_diff = ctrl.targetSteps - ctrl.currentSteps;
-//	timerIsRunning = true;
-//
-//	if (timer_idx == ctrl.timerIdx) {
-//		if (ctrl.currentSteps < ctrl.targetSteps) {
-//			// Check if accelerating
-//			if (ctrl.isAccelerating) {
-//				if (ctrl.currentSpeed < ctrl.targetSpeed) {
-//					// Increase speed if not yet at target speed
-//					ctrl.currentSpeed += ctrl.acceleration;
-//				} else {
-//					// Reached target speed, clear accelerating flag
-//					ctrl.isAccelerating = false;
-//				}
-//			}
-//			//FIXME controller crashes when finished accelerating
-//			//Guru Meditation Error: Core  0 panic'ed (Interrupt wdt timeout on CPU0).
-//
-//			// Check if decelerating
-//			if (ctrl.isDecelerating) { //FIXME isDecelerating is never set???
-//				if (ctrl.currentSpeed > ctrl.targetSpeed) {
-//					// Decrease speed if not yet at target speed
-//					ctrl.currentSpeed -= ctrl.deceleration;
-//				} else {
-//					// Reached target speed, clear decelerating flag
-//					ctrl.isDecelerating = false;
-//				}
-//			}
-//
-//			// Generate pulse for stepper motor
-//			gpio_set_level(ctrl.pulsePin, 1);
-//			ets_delay_us(500);  // Adjust delay as needed
-//			gpio_set_level(ctrl.pulsePin, 0);
-//
-//			// Update current step count
-//			ctrl.currentSteps++;
-//
-//			// Update timer period based on current speed
-//			timer_set_alarm_value(ctrl.timerGroup, ctrl.timerIdx, TIMER_BASE_CLK / ctrl.currentSpeed);
-//		} else {
-//			// Reached target step count, stop timer
-//			timer_pause(ctrl.timerGroup, ctrl.timerIdx);
-//			timerIsRunning = false;
-//			//ESP_LOGW(TAG,"finished, pausing timer");
-//		}
-//	}
 	return 1;
 }
 
