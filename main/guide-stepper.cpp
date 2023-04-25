@@ -11,7 +11,6 @@ extern "C"
 #include "config.hpp"
 #include "guide-stepper.hpp"
 #include "encoder.hpp"
-#include "gpio_evaluateSwitch.hpp"
 
 
 
@@ -24,7 +23,7 @@ extern "C"
 #define STEPPER_TEST_TRAVEL 65     //mm
                                    //
 #define MIN_MM 0
-#define MAX_MM 110 //60
+#define MAX_MM 60 
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
@@ -32,9 +31,8 @@ extern "C"
 #define SPEED_MIN 2.0   //mm/s
 #define SPEED_MAX 60.0 //mm/s
 
-#define SPEED 10 //35, 100, 50 rev
-#define ACCEL_MS 800.0  //ms from 0 to max
-#define DECEL_MS 500.0   //ms from max to 0
+#define ACCEL_MS 100.0  //ms from 0 to max
+#define DECEL_MS 90.0   //ms from max to 0
 
 #define STEPPER_STEPS_PER_ROT 1600
 #define STEPPER_STEPS_PER_MM STEPPER_STEPS_PER_ROT/4
@@ -72,10 +70,10 @@ void travelSteps(int stepsTarget){
     while (stepsToGo != 0){
 
         //--- wait if direction changed ---
-        //if (dirPrev != dir){
-        //        ESP_LOGW(TAG, " dir-change detected - waiting for move to finish \n ");
-        //        while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
-        //}
+        if (dirPrev != dir){
+                ESP_LOGI(TAG, " dir-change detected - waiting for move to finish \n ");
+                while(step.getState() != 1) vTaskDelay(1);  //wait for move to finish
+        }
 
         //--- currently moving right ---
         if (stepp_direction == true){               //currently moving right
@@ -189,57 +187,18 @@ void task_stepper_test(void *pvParameter)
 {
     init_stepper();
     home();
-    step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
-	//--- move from left to right repeatedly ---
-    // while (1) {
-    //     updateSpeedFromAdc();
-    //     step.runPosMm(STEPPER_TEST_TRAVEL);
-    //     while(step.getState() != 1) vTaskDelay(2);
-    //     ESP_LOGI(TAG, "finished moving right => moving left");
 
-    //  10updateSpeedFromAdc();
-    //     step.runPosMm(-STEPPER_TEST_TRAVEL);
-    //     while(step.getState() != 1) vTaskDelay(2); //1=idle
-    //     ESP_LOGI(TAG, "finished moving left => moving right");
-    // }
+    while (1) {
+        updateSpeedFromAdc();
+        step.runPosMm(STEPPER_TEST_TRAVEL);
+        while(step.getState() != 1) vTaskDelay(2);
+        ESP_LOGI(TAG, "finished moving right => moving left");
 
-	//--- control stepper using preset buttons ---
-	while(1){
-		vTaskDelay(20 / portTICK_PERIOD_MS);
-
-		//------ handle switches ------
-		//run handle functions for all switches
-		SW_START.handle();
-		SW_RESET.handle();
-		SW_SET.handle();
-		SW_PRESET1.handle();
-		SW_PRESET2.handle();
-		SW_PRESET3.handle();
-		SW_CUT.handle();
-		SW_AUTO_CUT.handle();
-
-		if (SW_RESET.risingEdge) {
-			ESP_LOGI(TAG, "button - stop stepper\n ");
-			buzzer.beep(1, 1000, 100);
-			step.stop();
-		}
-		if (SW_PRESET1.risingEdge) {
-			ESP_LOGI(TAG, "button - moving right\n ");
-			buzzer.beep(2, 300, 100);
-			step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
-			step.runPosMm(15);
-		}
-		if (SW_PRESET3.risingEdge) {
-			ESP_LOGI(TAG, "button - moving left\n ");
-			buzzer.beep(1, 500, 100);
-			step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
-			step.runPosMm(-15);
-		}
-		if (SW_PRESET2.risingEdge) {
-			buzzer.beep(1, 100, 100);
-			ESP_LOGW(TAG, "button - current state: %d\n, pos: %llu", (int)step.getState(), step.getPositionMm());
-		}
-	}
+        updateSpeedFromAdc();
+        step.runPosMm(-STEPPER_TEST_TRAVEL);
+        while(step.getState() != 1) vTaskDelay(2); //1=idle
+        ESP_LOGI(TAG, "finished moving left => moving right");
+    }
 }
 
 
@@ -276,8 +235,6 @@ void task_stepper_ctl(void *pvParameter)
         //read potentiometer and normalize (0-1) to get a variable for testing
         potiModifier = (float) gpio_readAdc(ADC_CHANNEL_POTI) / 4095; //0-4095 -> 0-1
         //ESP_LOGI(TAG, "current poti-modifier = %f", potiModifier);
-        ESP_LOGI(TAG, "delaying stepper-ctl task by %.1f ms (poti value)", 2000 * potiModifier);
-        vTaskDelay(2000 * potiModifier / portTICK_PERIOD_MS);
 
         //calculate steps to move
         cableLen = (double)encStepsDelta * 1000 / ENCODER_STEPS_PER_METER;
@@ -293,7 +250,7 @@ void task_stepper_ctl(void *pvParameter)
             ESP_LOGD(TAG, "cablelen=%.2lf, turns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial);
             ESP_LOGI(TAG, "MOVING %d steps", travelStepsFull);
             //TODO: calculate variable speed for smoother movement? for example intentionally lag behind and calculate speed according to buffered data
-            step.setSpeedMm(SPEED, ACCEL_MS, DECEL_MS);
+            step.setSpeedMm(35, 100, 50);
             //testing: get speed from poti
             //step.setSpeedMm(35, 1000*potiModifier+1, 1000*potiModifier+1);
             travelSteps(travelStepsExact);
