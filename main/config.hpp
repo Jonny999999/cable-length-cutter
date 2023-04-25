@@ -85,7 +85,7 @@ extern "C" {
 //----- stepper config -----
 //--------------------------
 //enable stepper test mode (dont start control and encoder task)
-//#define STEPPER_TEST
+#define STEPPER_TEST
 #define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
 #define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
 #define STEPPER_EN_PIN GPIO_NUM_0       //not connected (-> stepper always on)
