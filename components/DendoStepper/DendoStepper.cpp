@@ -55,6 +55,9 @@ void DendoStepper::init(uint8_t stepP, uint8_t dirP, uint8_t enP, timer_group_t 
 
 void DendoStepper::init()
 {
+    ESP_LOGW("DendoStepper", "semaphore init");
+    semaphore_isrVariables = xSemaphoreCreateBinary();
+    xSemaphoreGive(semaphore_isrVariables);
     uint64_t mask = (1ULL << conf.stepPin) | (1ULL << conf.dirPin) | (1ULL << conf.enPin); // put output gpio pins in bitmask
     gpio_config_t gpio_conf = {
         // config gpios
@@ -114,25 +117,36 @@ timer_avail:
     ESP_ERROR_CHECK(timer_isr_callback_add(conf.timer_group, conf.timer_idx, xISRwrap, this, 0)); // add callback fn to run when alarm is triggrd
 }
 
+
 esp_err_t DendoStepper::runPos(int32_t relative)
 {
-    if (!relative) // why would u call it with 0 wtf
-        return ESP_ERR_NOT_SUPPORTED;
-    if (ctrl.status > IDLE)
-    { // we are running, we need to adjust steps accordingly, for now just stop the movement
-        STEP_LOGW("DendoStepper", "Finising previous move, this command will be ignored");
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-
+    //TODO only enable when actually moving
     if (ctrl.status == DISABLED) // if motor is disabled, enable it
         enableMotor();
-    ctrl.status = ACC;
-    setDir(relative < 0); // set CCW if <0, else set CW
-    currentPos += relative;
-    calc(abs(relative));                                                                         // calculate velocity profile
-    ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
-    ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
 
+    setDir(relative < 0); // set CCW if <0, else set CW
+
+    if (!relative) // why would u call it with 0 wtf
+        return ESP_ERR_NOT_SUPPORTED;
+
+    if (ctrl.status > IDLE) { //currently moving
+        //ctrl.status = ctrl.status==COAST ? COAST : ACC; //stay at coast otherwise switch to ACC
+        ctrl.stepsRemaining = ctrl.stepsToGo - ctrl.stepCnt; 
+        calc(abs(relative) + ctrl.stepsRemaining); //calculate new velolcity profile for new+remaining steps
+        ESP_LOGW("DendoStepper", "EXTEND running movement (stepsRemaining: %d + stepsNew: %d  - current state: %d)", ctrl.stepsRemaining, abs(relative), (int)ctrl.status);
+        ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
+    }
+
+    else { //current state is IDLE
+           //ctrl.statusPrev = ctrl.status; //update previous status
+        calc(abs(relative));                                                                         // calculate velocity profile
+        ctrl.status = ACC;
+        ESP_ERROR_CHECK(timer_set_alarm_value(conf.timer_group, conf.timer_idx, ctrl.stepInterval)); // set HW timer alarm to stepinterval
+        ESP_ERROR_CHECK(timer_start(conf.timer_group, conf.timer_idx));                              // start the timer
+    }
+
+    //printf("runpos end -- steps: %d, status: %d, olddir: %d, newdir: %d\n", relative, ctrl.status, ctrl.dir, newDir);
+    currentPos += relative; //(target position / not actual)
     return ESP_OK;
 }
 
@@ -145,25 +159,30 @@ esp_err_t DendoStepper::runPosMm(int32_t relative)
     return runPos(relative * ctrl.stepsPerMm);
 }
 
+//customized: if already running and direction is the same immediately pass to runPos
 esp_err_t DendoStepper::runAbs(uint32_t position)
 {
-    if (getState() > IDLE) // we are already moving, so stop it
-        stop();
-    while (getState() > IDLE)
-    {
-        // waiting for idle, watchdog should take care of inf loop if it occurs
-        vTaskDelay(1);
-    } // shouldnt take long tho
+    //exit if nothing to do
+    if (position == currentPos) return 0; //already at position
 
-    if (position == currentPos) // we cant go anywhere
-        return 0;
-
+    //calculate steps necessary
     int32_t relativeSteps = 0;
     relativeSteps = (int32_t)position - currentPos;
 
+    //wait if direction needs to change
+    if (getState() > IDLE){//already moving
+        bool newDir = (relativeSteps < 0); // CCW if <0, else set CW
+        if (ctrl.dir != newDir){ //direction differs 
+            STEP_LOGE("DendoStepper", "DIRECTION HOT-CHANGE NOT SUPPORTED - Waiting for move to finish...");
+            while (getState() > IDLE) vTaskDelay(5); //wait for move to finish
+        }
+    }
+
+    //call runPos with new target position
     ESP_LOGI("DendoStepper", "Cur: %llu move %d", currentPos, relativeSteps);
     return runPos(relativeSteps); // run to new position
 }
+
 
 esp_err_t DendoStepper::runAbsMm(uint32_t position)
 {
@@ -194,6 +213,37 @@ void DendoStepper::setSpeedMm(uint32_t speed, uint16_t accT, uint16_t decT)
     ctrl.dec = ctrl.speed / (decT / 4000.0);
     STEP_LOGI("DendoStepper", "Speed set: v=%d mm/s t+=%d s t-=%d s", speed, accT, decT);
 }
+
+//CUSTOM - change speed while running 
+//FIXME: this approach does not work, since calc function would have to be run after change, this will mess up target steps...
+//void DendoStepper::changeSpeed(uint32_t speed)
+//{
+//    //TODO reduce duplicate code (e.g. call setSpeed function)
+//    //change speed
+//    ctrl.speed = speed;
+//    //change status to ACC/DEC
+//    STEP_LOGI("DendoStepper", "Speed changed: from v=%.2f rad/s to v=%.2f rad/s", ctrl.speed, speed);
+//    if (speed > ctrl.speed) ctrl.status = ACC;
+//    if (speed < ctrl.speed) ctrl.status = DEC;
+//}
+//
+//void DendoStepper::changeSpeedMm(uint32_t speed)
+//{
+//    //TODO reduce duplicate code (e.g. call setSpeedMm function)
+//    if (ctrl.stepsPerMm == 0)
+//    {
+//        STEP_LOGE("DendoStepper", "Steps per millimeter not set, cannot set the speed!");
+//    }
+//    //calc new speed
+//    float speedNew = speed * ctrl.stepsPerMm;
+//    //change status to ACC/DEC
+//    if (speedNew > ctl.speed) ctrl.status = ACC;
+//    if (speedNew < ctl.speed) ctrl.status = DEC;
+//    //update speed, log output
+//    ctrl.speed = speedNew;
+//    STEP_LOGI("DendoStepper", "Speed changed: from v=%.2f rad/s to v=%.2f rad/s", ctrl.speed, speedNew);
+//}
+
 
 void DendoStepper::setStepsPerMm(uint16_t steps)
 {
@@ -261,6 +311,7 @@ void DendoStepper::stop()
     }
     ctrl.runInfinite = false;
     timer_pause(conf.timer_group, conf.timer_idx); // stop the timer
+    //ctrl.statusPrev = ctrl.status; //update previous status
     ctrl.status = IDLE;
     ctrl.stepCnt = 0;
     gpio_set_level((gpio_num_t)conf.stepPin, 0);
@@ -287,10 +338,23 @@ bool DendoStepper::xISR()
 
     ctrl.stepCnt++;
 
+    ////CUSTOM: track actual precice current position
+    //if (ctrl.dir) {
+    //    ctrl.posActual ++;
+    //} else {
+    //    ctrl.posActual --;
+    //}
+    
+    //CUSTOM: track remaining steps for eventually resuming
+    //xSemaphoreTake(semaphore_isrVariables, portMAX_DELAY);
+    //ctrl.stepsRemaining = ctrl.stepCnt - ctrl.stepCnt; 
+    //xSemaphoreGive(semaphore_isrVariables);
+
     // we are done
     if (ctrl.stepsToGo == ctrl.stepCnt && !ctrl.runInfinite)
     {
         timer_pause(conf.timer_group, conf.timer_idx); // stop the timer
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = IDLE;
         ctrl.stepCnt = 0;
         return 0;
@@ -299,16 +363,19 @@ bool DendoStepper::xISR()
     if (ctrl.stepCnt > 0 && ctrl.stepCnt < ctrl.accEnd)
     { // we are accelerating
         ctrl.currentSpeed += ctrl.accInc;
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = ACC; // we are accelerating, note that*/
     }
     else if (ctrl.stepCnt > ctrl.coastEnd && !ctrl.runInfinite)
     { // we must be deccelerating then
         ctrl.currentSpeed -= ctrl.decInc;
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = DEC; // we are deccelerating
     }
     else
     {
         ctrl.currentSpeed = ctrl.targetSpeed;
+        //ctrl.statusPrev = ctrl.status; //update previous status
         ctrl.status = COAST; // we are coasting
     }
 
@@ -321,17 +388,33 @@ bool DendoStepper::xISR()
 
 void DendoStepper::calc(uint32_t targetSteps)
 {
+	//only set initial speed if IDLE
+	if(ctrl.status == 1){
+		ctrl.currentSpeed = 0;
+		ESP_LOGD("DendoStepper", "calc-start: reset speed to 0 (start from idle) %lf\n", ctrl.currentSpeed);
+	}
+	else{
+		ESP_LOGD("DendoStepper", "calc start: NOT resetting speed (extend from ACC/DEC/COAST): %lf\n", ctrl.currentSpeed);
+	}
+    //CUSTOM reset counter if already moving
+    ctrl.stepCnt = 0; //FIXME bugs when set 0 while ISR reads/runs? mutex
 
-    ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
-
+    //steps from ctrl.speed -> 0:
     ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
+	ESP_LOGD("DendoStepper", "decSteps: %d  currspeed: %lf,  ctrlSpeed: %lf\n", ctrl.decSteps, ctrl.currentSpeed,  ctrl.speed);
+    //steps from 0 -> ctrl.speed:
+    //ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
+    //steps from ctrl.currentSpeed -> ctrl.speed:
+    ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc)  * (ctrl.speed - ctrl.currentSpeed) / ctrl.speed;
+	ESP_LOGD("DendoStepper", "accSteps: %d  currspeed: %lf,  ctrlSpeed: %lf\n", ctrl.accSteps, ctrl.currentSpeed,  ctrl.speed);
 
     if (targetSteps < (ctrl.decSteps + ctrl.accSteps))
     {
         ESP_LOGI("Dendostepper", "Computing new speed");
 
         ctrl.speed = sqrt(2 * targetSteps * ((ctrl.dec * ctrl.acc) / (ctrl.dec + ctrl.acc)));
-        ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
+        //ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc);
+        ctrl.accSteps = 0.5 * ctrl.acc * (ctrl.speed / ctrl.acc) * (ctrl.speed / ctrl.acc)  * (ctrl.speed - ctrl.currentSpeed) / ctrl.speed;
         ctrl.decSteps = 0.5 * ctrl.dec * (ctrl.speed / ctrl.dec) * (ctrl.speed / ctrl.dec);
     }
 
@@ -339,13 +422,27 @@ void DendoStepper::calc(uint32_t targetSteps)
     ctrl.coastEnd = targetSteps - ctrl.decSteps;
     ctrl.targetSpeed = ctrl.speed;
 
-    ctrl.accInc = ctrl.targetSpeed / (double)ctrl.accSteps;
+    ctrl.accInc = (ctrl.targetSpeed - ctrl.currentSpeed) / (double)ctrl.accSteps;
     ctrl.decInc = ctrl.targetSpeed / (double)ctrl.decSteps;
 
-    ctrl.currentSpeed = ctrl.accInc;
+	//only set initial speed if IDLE
+	if(ctrl.status == 1){
+		ctrl.currentSpeed = ctrl.accInc;
+		ESP_LOGD("DendoStepper", "`reset curr speeed to accinc: %lf\n", ctrl.currentSpeed);
+		ESP_LOGD("DendoStepper", "status=%d setting speed to initial value: %lf\n",ctrl.status, ctrl.currentSpeed);
+	}
+	else{
+		ESP_LOGD("DendoStepper", "status=%d NOT resetting speed to initial value %lf\n",ctrl.status, ctrl.currentSpeed);
+	}
 
     ctrl.stepInterval = TIMER_F / ctrl.currentSpeed;
     ctrl.stepsToGo = targetSteps;
 
-    STEP_LOGI("calc", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u", ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
+	//debug log output
+	ESP_LOGD("DendoStepper", "accSteps: %d,  accInc: %lf, decSteps: %d, decInc: %lf", 
+			ctrl.accSteps, ctrl.accInc, ctrl.decSteps, ctrl.decInc);
+    ESP_LOGD("DendoStepper", "speedNow=%.1f, speedTarget=%.1f, accEnd=%d, coastEnd=%d,  accSteps=%d, accInc=%.3f\n",
+            ctrl.currentSpeed, ctrl.targetSpeed, ctrl.accEnd, ctrl.coastEnd, ctrl.accSteps, ctrl.accInc);
+    ESP_LOGD("DendoStepper", "acc end:%u coastend:%u stepstogo:%u speed:%f acc:%f int: %u",
+			ctrl.accEnd, ctrl.coastEnd, ctrl.stepsToGo, ctrl.speed, ctrl.acc, ctrl.stepInterval);
 }
