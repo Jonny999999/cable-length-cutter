@@ -183,16 +183,24 @@ void task_stepper_test(void *pvParameter)
 		SW_CUT.handle();
 		SW_AUTO_CUT.handle();
 
+		//cycle through test commands with one button
 		if (SW_RESET.risingEdge) {
-			//buzzer.beep(1, 1000, 100);
-			if (state) {
-				stepper_setTargetSteps(1000);
-				state = 0;
-			} else {
-				stepper_setTargetSteps(600);
-				state = 1;
+			switch (state){
+				case 0:
+					stepper_setTargetSteps(1000);
+					state++;
+					break;
+				case 1:
+					stepper_setTargetSteps(100);
+					state++;
+					break;
+				case 2:
+					stepper_setTargetSteps(2000);
+					state = 0;
+					break;
 			}
 		}
+	}
 	//	if (SW_PRESET1.risingEdge) {
 	//		buzzer.beep(2, 300, 100);
 	//		stepperSw_setTargetSteps(1000);
@@ -205,7 +213,6 @@ void task_stepper_test(void *pvParameter)
 	//		buzzer.beep(1, 100, 100);
 	//		stepperSw_setTargetSteps(30000);
 	//	}
-	}
 }
 
 

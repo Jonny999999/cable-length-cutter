@@ -26,13 +26,20 @@ extern "C" {
 static const char *TAG = "stepper-ctl"; //tag for logging
 									
 bool direction = 1;
+bool directionTarget = 1;
 bool timerIsRunning = false;
 bool timer_isr(void *arg);
 
 static timer_group_t timerGroup = TIMER_GROUP_0;
 static timer_idx_t timerIdx = TIMER_0;
+
+//move to isr
 static uint64_t posTarget = 0;
 static uint64_t posNow = 0;
+static uint64_t stepsToGo = 0;
+static uint32_t speedMin = 20000;
+static uint32_t speedNow = speedMin;
+static int debug = 0;
 
 
 
@@ -87,6 +94,32 @@ void stepperSw_setTargetSteps(uint64_t target){
 
 
 
+
+void task_stepper_debug(void *pvParameter){
+	while (1){
+		ESP_LOGI("stepper-DEBUG",
+				"timer=%d "
+				"dir=%d "
+				"dirTarget=%d "
+				"posTarget=%llu "
+				"posNow=%llu "
+				"stepsToGo=%llu "
+				"speedNow=%u "
+				"debug=%d ",
+
+				timerIsRunning,
+				direction, 
+				directionTarget, 
+				posTarget, 
+				posNow, 
+				stepsToGo,
+				speedNow,
+				debug
+				);
+
+			vTaskDelay(300 / portTICK_PERIOD_MS);
+	}
+}
 
 
 
@@ -158,20 +191,16 @@ bool timer_isr(void *arg) {
 
 	//--- variables ---
 	static uint32_t speedTarget = 100000;
-	static uint32_t speedMin = 20000;
 	//FIXME increment actually has to be re-calculated every run to have linear accel (because also gets called faster/slower)
 	static uint32_t decel_increment = 200;
 	static uint32_t accel_increment = 150;
 
-	static uint64_t stepsToGo = 0;
-	static uint32_t speedNow = speedMin;
 
 
 	//--- define direction, stepsToGo ---
 	//int64_t delta = (int)posTarget - (int)posNow;
 	//bool directionTarget = delta >= 0 ? 1 : 0;
-	bool directionTarget;
-	if (posTarget > posNow) {
+	if (posTarget >= posNow) {
 		directionTarget = 1;
 	} else {
 		directionTarget = 0;
@@ -179,7 +208,7 @@ bool timer_isr(void *arg) {
 	//directionTarget = 1;
 	//direction = 1;
 	//gpio_set_level(STEPPER_DIR_PIN, direction);
-	if (direction != directionTarget) {
+	if ( (direction != directionTarget) && (posTarget != posNow)) {
 		//ESP_LOGW(TAG, "direction differs! new: %d", direction);
 		if (stepsToGo == 0){
 			direction = directionTarget; //switch direction if almost idle
@@ -188,7 +217,8 @@ bool timer_isr(void *arg) {
 			stepsToGo = 2;
 		} else {
 			//stepsToGo = speedNow / decel_increment; //set steps to decel to min speed
-			stepsToGo = speedNow / decel_increment;
+			//set to minimun decel steps
+			stepsToGo = (speedNow - speedMin) / decel_increment;
 		}
 	} else if (direction == 1) {
 		stepsToGo = posTarget - posNow;
