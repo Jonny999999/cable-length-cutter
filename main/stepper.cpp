@@ -14,6 +14,13 @@ extern "C" {
 //#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
 //#define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
 
+#define STEPPER_STEPS_PER_MM	200/2	//steps/mm
+#define STEPPER_SPEED_DEFAULT	20		//mm/s
+#define STEPPER_SPEED_MIN		4		//mm/s  - speed at which stepper immediately starts/stops
+#define STEPPER_ACCEL_INC		3		//steps/s per cycle 
+#define STEPPER_DECEL_INC		8		//steps/s per cycle
+
+
 #define TIMER_F 1000000ULL
 #define TICK_PER_S TIMER_S
 #define NS_TO_T_TICKS(x) (x)
@@ -33,13 +40,17 @@ bool timer_isr(void *arg);
 static timer_group_t timerGroup = TIMER_GROUP_0;
 static timer_idx_t timerIdx = TIMER_0;
 
-//move to isr
+//TODO the below variables can be moved to isr function once debug output is no longer needed
 static uint64_t posTarget = 0;
 static uint64_t posNow = 0;
 static uint64_t stepsToGo = 0;
-static uint32_t speedMin = 20000;
+static uint32_t speedMin = STEPPER_SPEED_MIN * STEPPER_STEPS_PER_MM;
 static uint32_t speedNow = speedMin;
 static int debug = 0;
+static uint32_t speedTarget = STEPPER_SPEED_DEFAULT * STEPPER_STEPS_PER_MM;
+//TODO/NOTE increment actually has to be re-calculated every run to have linear accel (because also gets called faster/slower)
+static uint32_t decel_increment = STEPPER_DECEL_INC;
+static uint32_t accel_increment = STEPPER_ACCEL_INC;
 
 
 
@@ -94,7 +105,9 @@ void stepperSw_setTargetSteps(uint64_t target){
 
 
 
-
+//======================
+//===== DEBUG task =====
+//======================
 void task_stepper_debug(void *pvParameter){
 	while (1){
 		ESP_LOGI("stepper-DEBUG",
@@ -105,6 +118,7 @@ void task_stepper_debug(void *pvParameter){
 				"posNow=%llu "
 				"stepsToGo=%llu "
 				"speedNow=%u "
+				"speedTarget=%u "
 				"debug=%d ",
 
 				timerIsRunning,
@@ -114,6 +128,7 @@ void task_stepper_debug(void *pvParameter){
 				posNow, 
 				stepsToGo,
 				speedNow,
+				speedTarget,
 				debug
 				);
 
@@ -122,22 +137,24 @@ void task_stepper_debug(void *pvParameter){
 }
 
 
+//=====================
+//===== set speed =====
+//=====================
+void stepper_setSpeed(uint32_t speedMmPerS) {
+	ESP_LOGW(TAG, "set target speed from %u to %u mm/s  (%u steps/s)",
+			speedTarget, speedMmPerS, speedMmPerS * STEPPER_STEPS_PER_MM);
+	speedTarget = speedMmPerS * STEPPER_STEPS_PER_MM;
+}
 
 
-//========================
-//==== set target pos ====
-//========================
-void stepper_setTargetSteps(int target_steps) {
-	ESP_LOGW(TAG, "set target steps from %lld to %d  (stepsNow: %llu", (long long int)posTarget, target_steps, (long long int)posNow);
+//==========================
+//== set target pos STEPS ==
+//==========================
+void stepper_setTargetPosSteps(uint64_t target_steps) {
+	ESP_LOGW(TAG, "update target position from %llu to %llu  steps (stepsNow: %llu", posTarget, target_steps, posNow);
 	posTarget = target_steps;
-	//TODO switch dir pin in isr? not in sync with count
-	//TODO switch direction using negative values as below
-
-  // Update the targetSteps value
-//ctrl.targetSteps = abs(target_steps);
 
   // Check if the timer is currently paused
-	ESP_LOGW(TAG, "check if timer is running %d", timerIsRunning);
   if (!timerIsRunning){
     // If the timer is paused, start it again with the updated targetSteps
 	timerIsRunning = true;
@@ -145,11 +162,17 @@ void stepper_setTargetSteps(int target_steps) {
     ESP_ERROR_CHECK(timer_set_alarm_value(timerGroup, timerIdx, 1000));
     //timer_set_counter_value(timerGroup, timerIdx, 1000);
     ESP_ERROR_CHECK(timer_start(timerGroup, timerIdx));
-	ESP_LOGW(TAG, "STARTED TIMER");
   }
 }
 
 
+//=========================
+//=== set target pos MM ===
+//=========================
+void stepper_setTargetPosMm(uint32_t posMm){
+	ESP_LOGW(TAG, "set target position to %u mm", posMm);
+	stepper_setTargetPosSteps(posMm * STEPPER_STEPS_PER_MM);
+}
 
 
 
@@ -184,86 +207,80 @@ void stepper_init(){
 //=== timer interrupt function ===
 //================================
 bool timer_isr(void *arg) {
-	// Generate pulse for stepper motor
-	//turn pin on (fast)
-	GPIO.out_w1ts = (1ULL << STEPPER_STEP_PIN);
 
-
+	//-----------------
 	//--- variables ---
-	static uint32_t speedTarget = 100000;
-	//FIXME increment actually has to be re-calculated every run to have linear accel (because also gets called faster/slower)
-	static uint32_t decel_increment = 200;
-	static uint32_t accel_increment = 150;
+	//-----------------
+	//TODO used (currently global) variables here
 
-
-
+	//-----------------------------------
 	//--- define direction, stepsToGo ---
-	//int64_t delta = (int)posTarget - (int)posNow;
-	//bool directionTarget = delta >= 0 ? 1 : 0;
-	if (posTarget >= posNow) {
-		directionTarget = 1;
-	} else {
-		directionTarget = 0;
-	}
-	//directionTarget = 1;
-	//direction = 1;
-	//gpio_set_level(STEPPER_DIR_PIN, direction);
+	//-----------------------------------
+	//Note: the idea is that the stepper has to decelerate to min speed first before changeing the direction
+	//define target direction depending on position difference
+	bool directionTarget = posTarget > posNow ? 1 : 0;
+	//DIRECTION DIFFERS (change)
 	if ( (direction != directionTarget) && (posTarget != posNow)) {
-		//ESP_LOGW(TAG, "direction differs! new: %d", direction);
-		if (stepsToGo == 0){
-			direction = directionTarget; //switch direction if almost idle
+		if (stepsToGo == 0){ //standstill
+			direction = directionTarget; //switch direction
 			gpio_set_level(STEPPER_DIR_PIN, direction);
-			//stepsToGo = abs((int64_t)posTarget - (int64_t)posNow);
-			stepsToGo = 2;
+			stepsToGo = abs(int64_t(posTarget - posNow));
 		} else {
-			//stepsToGo = speedNow / decel_increment; //set steps to decel to min speed
 			//set to minimun decel steps
 			stepsToGo = (speedNow - speedMin) / decel_increment;
 		}
-	} else if (direction == 1) {
-		stepsToGo = posTarget - posNow;
-		//stepsToGo = abs((int64_t)posTarget - (int64_t)posNow);
-	} else {
-		stepsToGo = posNow - posTarget;
-		//stepsToGo = abs((int64_t)posTarget - (int64_t)posNow);
 	}
-	//TODO fix direction code above currently ony works with the below line instead
-	//stepsToGo = abs((int64_t)posTarget - (int64_t)posNow);
+	//NORMAL (any direction 0/1)
+	else {
+		stepsToGo = abs(int64_t(posTarget - posNow));
+	}
 
-
+	//--------------------
 	//--- define speed ---
+	//--------------------
+	//FIXME noticed crash: division by 0 when min speed > target speed
 	uint64_t stepsDecelRemaining = (speedNow - speedMin) / decel_increment;
-
+	//DECELERATE
 	if (stepsToGo <= stepsDecelRemaining) {
+		//FIXME if stepsToGo gets updated (lowered) close to target while close to target, the stepper may stop too fast -> implement possibility to 'overshoot and reverse'?
 		if ((speedNow - speedMin) > decel_increment) {
 			speedNow -= decel_increment;
 		} else {
 			speedNow = speedMin; //PAUSE HERE??? / irrelevant?
 		}
 	}
+	//ACCELERATE
 	else if (speedNow < speedTarget) {
 		speedNow += accel_increment;
 		if (speedNow > speedTarget) speedNow = speedTarget;
 	}
+	//COASTING
 	else { //not relevant?
 		speedNow = speedTarget;
 	}
 
-
-	//--- update timer ---
+	//-------------------------------
+	//--- update timer, increment ---
+	//-------------------------------
+	//AT TARGET -> STOP
 	if (stepsToGo == 0) {
 		timer_pause(timerGroup, timerIdx);
 		timerIsRunning = false;
-	}
-	else {
-		ESP_ERROR_CHECK(timer_set_alarm_value(timerGroup, timerIdx, TIMER_BASE_CLK / speedNow));
+		speedNow = speedMin;
+		return 1;
 	}
 
+	//STEPS REMAINING -> NEXT STEP
+	//update timer with new speed
+	ESP_ERROR_CHECK(timer_set_alarm_value(timerGroup, timerIdx, TIMER_F / speedNow));
 
-	//--- increment position ---
-	if (stepsToGo > 0){
-		stepsToGo --; //TODO increment at start, check at start??
-	}
+	//generate pulse
+	GPIO.out_w1ts = (1ULL << STEPPER_STEP_PIN); //turn on (fast)
+	ets_delay_us(10);
+	GPIO.out_w1tc = (1ULL << STEPPER_STEP_PIN); //turn off (fast)
+
+	//increment pos
+	stepsToGo --;
 	if (direction == 1){
 		posNow ++;
 	} else {
@@ -271,15 +288,9 @@ bool timer_isr(void *arg) {
 		if (posNow != 0){
 			posNow --;
 		} else {
-			//ERR posNow would be negative?
+			ESP_LOGE(TAG,"isr: posNow would be negative - ignoring decrement");
 		}
 	}
-
-
-	// Generate pulse for stepper motor
-	//turn pin off (fast)
-	GPIO.out_w1tc = (1ULL << STEPPER_STEP_PIN);
-
 	return 1;
 }
 

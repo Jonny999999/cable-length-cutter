@@ -187,15 +187,23 @@ void task_stepper_test(void *pvParameter)
 		if (SW_RESET.risingEdge) {
 			switch (state){
 				case 0:
-					stepper_setTargetSteps(1000);
+					stepper_setTargetPosMm(50);
+					//stepper_setTargetPosSteps(1000);
 					state++;
 					break;
 				case 1:
-					stepper_setTargetSteps(100);
+					stepper_setTargetPosMm(80);
+					//stepper_setTargetPosSteps(100);
 					state++;
 					break;
 				case 2:
-					stepper_setTargetSteps(2000);
+					stepper_setTargetPosMm(20);
+					//stepper_setTargetPosSteps(100);
+					state++;
+					break;
+				case 3:
+					stepper_setTargetPosMm(60);
+					//stepper_setTargetPosSteps(2000);
 					state = 0;
 					break;
 			}
