@@ -23,7 +23,7 @@ extern "C"
 #define STEPPER_TEST_TRAVEL 65     //mm
 
 #define MIN_MM 0
-#define MAX_MM 40 
+#define MAX_MM 50 
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
@@ -37,7 +37,7 @@ extern "C"
 
 //simulate encoder with reset button to test stepper ctl task
 //note STEPPER_TEST has to be defined as well
-#define STEPPER_SIMULATE_ENCODER
+//#define STEPPER_SIMULATE_ENCODER
 
 //----------------------
 //----- variables ------
@@ -68,6 +68,7 @@ void travelSteps(int stepsTarget){
             remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
             if (stepsToGo > remaining){             //new distance will exceed limit
                 stepper_setTargetPosSteps(POS_MAX_STEPS);        //move to limit
+				//TODO wait for limit actually reached here?
                 posNow = POS_MAX_STEPS;
                 stepp_direction = false;            //change current direction for next iteration
                 stepsToGo = stepsToGo - remaining;  //decrease target length by already traveled distance
@@ -86,6 +87,7 @@ void travelSteps(int stepsTarget){
             remaining = posNow - POS_MIN_STEPS;
             if (stepsToGo > remaining){
                 stepper_setTargetPosSteps(POS_MIN_STEPS);
+				//TODO wait for limit actually reached here?
                 posNow = POS_MIN_STEPS;
                 stepp_direction = true;
                 stepsToGo = stepsToGo - remaining;
@@ -107,21 +109,6 @@ void travelSteps(int stepsTarget){
 //move axis certain Mm (relative) between left and right or reverse when negative
 void travelMm(int length){
     travelSteps(length * STEPPER_STEPS_PER_MM);
-}
-
-
-//define zero/start position 
-//currently crashes into hardware limitation for certain time 
-//TODO: limit switch
-void home() {
-	//TODO add function for this to stepper driver
-    ESP_LOGW(TAG, "auto-home...");
-    //....step.setSpeedMm(100, 500, 10);
-    //....step.runInf(1);
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
-    //....step.stop();
-    //....step.resetAbsolute();
-    ESP_LOGW(TAG, "auto-home finished");
 }
 
 
@@ -233,7 +220,7 @@ void task_stepper_ctl(void *pvParameter)
     float potiModifier;
 
     init_stepper();
-    home();
+    stepper_home(MAX_MM);
 
     while(1){
 #ifdef STEPPER_SIMULATE_ENCODER
@@ -271,8 +258,8 @@ void task_stepper_ctl(void *pvParameter)
         }
         else {
             //TODO use encoder queue to only run this check at encoder event?
-            vTaskDelay(2);
+            vTaskDelay(5);
         }
-		vTaskDelay(10 / portTICK_PERIOD_MS);
+		vTaskDelay(5 / portTICK_PERIOD_MS);
     }
 }

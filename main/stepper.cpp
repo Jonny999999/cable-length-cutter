@@ -131,6 +131,29 @@ void stepper_setTargetPosMm(uint32_t posMm){
 
 
 
+//======================
+//======== home ========
+//======================
+//define zero/start position 
+//run to limit and define zero/start position. 
+//Currently simply runs stepper for travelMm and bumps into hardware limit
+void stepper_home(uint32_t travelMm){
+	//TODO add timeout, limitswitch...
+	ESP_LOGW(TAG, "initiate auto-home...");
+	posNow = travelMm * STEPPER_STEPS_PER_MM;
+	while (posNow != 0){
+		//reactivate just in case stopped by other call to prevent deadlock
+		if (!timerIsRunning) {
+			stepper_setTargetPosSteps(0);
+		}
+		vTaskDelay(100 / portTICK_PERIOD_MS);
+	}
+	ESP_LOGW(TAG, "finished auto-home");
+	return;
+}
+
+
+
 //========================
 //===== init stepper =====
 //========================
