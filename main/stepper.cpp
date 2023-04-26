@@ -10,16 +10,19 @@ extern "C" {
 #include "esp_log.h"
 }
 
-//config from config.hpp
+
+//=====================
+//=== configuration ===
+//=====================
+//used macros from config.hpp:
 //#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
 //#define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
 
-#define STEPPER_STEPS_PER_MM	200/2	//steps/mm
-#define STEPPER_SPEED_DEFAULT	20		//mm/s
-#define STEPPER_SPEED_MIN		4		//mm/s  - speed at which stepper immediately starts/stops
-#define STEPPER_ACCEL_INC		3		//steps/s per cycle 
-#define STEPPER_DECEL_INC		8		//steps/s per cycle
-
+//#define STEPPER_STEPS_PER_MM	200/2	//steps/mm (steps-per-rot / slope)
+//#define STEPPER_SPEED_DEFAULT	20		//mm/s
+//#define STEPPER_SPEED_MIN		4		//mm/s  - speed threshold at which stepper immediately starts/stops
+//#define STEPPER_ACCEL_INC		3		//steps/s increment per cycle 
+//#define STEPPER_DECEL_INC		8		//steps/s decrement per cycle
 
 #define TIMER_F 1000000ULL
 #define TICK_PER_S TIMER_S
@@ -30,7 +33,7 @@ extern "C" {
 //========================
 //=== global variables ===
 //========================
-static const char *TAG = "stepper-ctl"; //tag for logging
+static const char *TAG = "stepper-driver"; //tag for logging
 									
 bool direction = 1;
 bool directionTarget = 1;

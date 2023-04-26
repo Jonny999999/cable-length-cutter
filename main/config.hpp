@@ -86,10 +86,16 @@ extern "C" {
 //--------------------------
 //enable stepper test mode (dont start control and encoder task)
 #define STEPPER_TEST
-#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
-#define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
-#define STEPPER_EN_PIN GPIO_NUM_0       //not connected (-> stepper always on)
-//more detailed options for testing are currently defined in guide-stepper.cpp
+//pins
+#define STEPPER_STEP_PIN		GPIO_NUM_18    //mos1
+#define STEPPER_DIR_PIN			GPIO_NUM_16     //ST3
+//driver settings
+#define STEPPER_STEPS_PER_MM	200/2	//steps/mm (steps-per-rot / slope)
+#define STEPPER_SPEED_DEFAULT	20		//mm/s
+#define STEPPER_SPEED_MIN		4		//mm/s  - speed threshold at which stepper immediately starts/stops
+#define STEPPER_ACCEL_INC		3		//steps/s increment per cycle 
+#define STEPPER_DECEL_INC		8		//steps/s decrement per cycle
+//options affecting movement are currently defined in guide-stepper.cpp
 
 
 
