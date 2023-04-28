@@ -239,8 +239,16 @@ bool timer_isr(void *arg) {
 	//FIXME noticed crash: division by 0 when min speed > target speed
 	uint64_t stepsDecelRemaining = (speedNow - speedMin) / decel_increment;
 	//DECELERATE
+
+	//prevent hard stop (faster stop than decel ramp)
+	//Idea: when target gets lowered while decelerating, 
+	//      move further than target to not exceed decel ramp (overshoot),
+	//      then change dir and move back to actual target pos
+	if (stepsToGo < stepsDecelRemaining/2){ //significantly less steps planned to comply with decel ramp
+		stepsToGo = stepsDecelRemaining; //set to required steps
+	}
+
 	if (stepsToGo <= stepsDecelRemaining) {
-		//FIXME if stepsToGo gets updated (lowered) close to target while close to target, the stepper may stop too fast -> implement possibility to 'overshoot and reverse'?
 		if ((speedNow - speedMin) > decel_increment) {
 			speedNow -= decel_increment;
 		} else {

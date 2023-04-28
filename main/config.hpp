@@ -94,7 +94,7 @@ extern "C" {
 #define STEPPER_SPEED_DEFAULT	20		//mm/s
 #define STEPPER_SPEED_MIN		4		//mm/s  - speed threshold at which stepper immediately starts/stops
 #define STEPPER_ACCEL_INC		3		//steps/s increment per cycle 
-#define STEPPER_DECEL_INC		8		//steps/s decrement per cycle
+#define STEPPER_DECEL_INC		7		//steps/s decrement per cycle
 //options affecting movement are currently defined in guide-stepper.cpp
 
 

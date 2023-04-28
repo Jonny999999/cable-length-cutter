@@ -153,6 +153,7 @@ void task_stepper_test(void *pvParameter)
 		SW_CUT.handle();
 		SW_AUTO_CUT.handle();
 
+#ifdef ONE_BUTTON_TEST //test with "reset-button" only
 		//cycle through test commands with one button
 		if (SW_RESET.risingEdge) {
 			switch (state){
@@ -178,21 +179,27 @@ void task_stepper_test(void *pvParameter)
 					break;
 			}
 		}
-	}
-	//	if (SW_PRESET1.risingEdge) {
-	//		buzzer.beep(2, 300, 100);
-	//		stepperSw_setTargetSteps(1000);
-	//	}
-	//	if (SW_PRESET2.risingEdge) {
-	//		buzzer.beep(1, 500, 100);
-	//		stepperSw_setTargetSteps(10000);
-	//	}
-	//	if (SW_PRESET3.risingEdge) {
-	//		buzzer.beep(1, 100, 100);
-	//		stepperSw_setTargetSteps(30000);
-	//	}
-}
+#else //test with all buttons
+		if (SW_RESET.risingEdge) {
+			buzzer.beep(1, 500, 100);
+			stepper_setTargetPosMm(0);
+		}
+		if (SW_PRESET1.risingEdge) {
+			buzzer.beep(1, 200, 100);
+			stepper_setTargetPosMm(50);
+		}
+		if (SW_PRESET2.risingEdge) {
+			buzzer.beep(2, 200, 100);
+			stepper_setTargetPosMm(75);
+		}
+		if (SW_PRESET3.risingEdge) {
+			buzzer.beep(3, 200, 100);
+			stepper_setTargetPosMm(100);
+		}
 #endif
+	}
+}
+#endif //end SIMULATE_ENCODER
 
 
 
