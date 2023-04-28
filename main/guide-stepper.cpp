@@ -68,7 +68,7 @@ void travelSteps(int stepsTarget){
             remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
             if (stepsToGo > remaining){             //new distance will exceed limit
                 stepper_setTargetPosSteps(POS_MAX_STEPS);        //move to limit
-				//TODO wait for limit actually reached here?
+				stepper_waitForStop(1000);
                 posNow = POS_MAX_STEPS;
                 stepp_direction = false;            //change current direction for next iteration
                 stepsToGo = stepsToGo - remaining;  //decrease target length by already traveled distance
@@ -87,7 +87,7 @@ void travelSteps(int stepsTarget){
             remaining = posNow - POS_MIN_STEPS;
             if (stepsToGo > remaining){
                 stepper_setTargetPosSteps(POS_MIN_STEPS);
-				//TODO wait for limit actually reached here?
+				stepper_waitForStop(1000);
                 posNow = POS_MIN_STEPS;
                 stepp_direction = true;
                 stepsToGo = stepsToGo - remaining;

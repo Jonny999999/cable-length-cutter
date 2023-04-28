@@ -94,7 +94,7 @@ void task_stepper_debug(void *pvParameter){
 //===== set speed =====
 //=====================
 void stepper_setSpeed(uint32_t speedMmPerS) {
-	ESP_LOGW(TAG, "set target speed from %u to %u mm/s  (%u steps/s)",
+	ESP_LOGI(TAG, "set target speed from %u to %u mm/s  (%u steps/s)",
 			speedTarget, speedMmPerS, speedMmPerS * STEPPER_STEPS_PER_MM);
 	speedTarget = speedMmPerS * STEPPER_STEPS_PER_MM;
 }
@@ -105,14 +105,14 @@ void stepper_setSpeed(uint32_t speedMmPerS) {
 //== set target pos STEPS ==
 //==========================
 void stepper_setTargetPosSteps(uint64_t target_steps) {
-	ESP_LOGW(TAG, "update target position from %llu to %llu  steps (stepsNow: %llu", posTarget, target_steps, posNow);
+	ESP_LOGI(TAG, "update target position from %llu to %llu  steps (stepsNow: %llu", posTarget, target_steps, posNow);
 	posTarget = target_steps;
 
   // Check if the timer is currently paused
   if (!timerIsRunning){
     // If the timer is paused, start it again with the updated targetSteps
 	timerIsRunning = true;
-	ESP_LOGW(TAG, "starting timer because did not run before");
+	ESP_LOGI(TAG, "starting timer");
     ESP_ERROR_CHECK(timer_set_alarm_value(timerGroup, timerIdx, 1000));
     //timer_set_counter_value(timerGroup, timerIdx, 1000);
     ESP_ERROR_CHECK(timer_start(timerGroup, timerIdx));
@@ -125,8 +125,28 @@ void stepper_setTargetPosSteps(uint64_t target_steps) {
 //=== set target pos MM ===
 //=========================
 void stepper_setTargetPosMm(uint32_t posMm){
-	ESP_LOGW(TAG, "set target position to %u mm", posMm);
+	ESP_LOGI(TAG, "set target position to %u mm", posMm);
 	stepper_setTargetPosSteps(posMm * STEPPER_STEPS_PER_MM);
+}
+
+
+
+//=======================
+//===== waitForStop =====
+//=======================
+//delay until stepper is stopped, optional timeout in ms, 0 = no limit
+void stepper_waitForStop(uint32_t timeoutMs){
+	ESP_LOGI(TAG, "waiting for stepper to stop...");
+	uint32_t timestampStart = esp_log_timestamp();	
+	while (timerIsRunning) {
+		if ( (esp_log_timestamp() - timestampStart) >= timeoutMs && timeoutMs != 0){
+			ESP_LOGE(TAG, "timeout waiting for stepper to stop");
+			return;
+		}
+		vTaskDelay(100 / portTICK_PERIOD_MS);
+	}
+	ESP_LOGI(TAG, "finished waiting stepper to stop");
+	return;
 }
 
 
@@ -158,14 +178,14 @@ void stepper_home(uint32_t travelMm){
 //===== init stepper =====
 //========================
 void stepper_init(){
-	ESP_LOGW(TAG, "init - configure struct...");
+	ESP_LOGI(TAG, "init - configure struct...");
 
 	// Configure pulse and direction pins as outputs
-	ESP_LOGW(TAG, "init - configure gpio pins...");
+	ESP_LOGI(TAG, "init - configure gpio pins...");
 	gpio_set_direction(STEPPER_DIR_PIN, GPIO_MODE_OUTPUT);
 	gpio_set_direction(STEPPER_STEP_PIN, GPIO_MODE_OUTPUT);
 
-	ESP_LOGW(TAG, "init - initialize/configure timer...");
+	ESP_LOGI(TAG, "init - initialize/configure timer...");
 	timer_config_t timer_conf = {
 		.alarm_en = TIMER_ALARM_EN,         // we need alarm
 		.counter_en = TIMER_PAUSE,          // dont start now lol

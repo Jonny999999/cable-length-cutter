@@ -3,6 +3,9 @@
 //init stepper pins and timer
 void stepper_init();
 
+//delay until stepper is stopped, optional timeout in ms, 0 = no limit
+void stepper_waitForStop(uint32_t timeoutMs = 0);
+
 //run to limit and define zero/start position. (busy until finished)
 //Currently simply runs stepper for travelMm and bumps into hardware limit
 void stepper_home(uint32_t travelMm = 60);
