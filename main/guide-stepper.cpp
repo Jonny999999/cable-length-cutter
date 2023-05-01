@@ -23,7 +23,7 @@ extern "C"
 #define STEPPER_TEST_TRAVEL 65     //mm
 
 #define MIN_MM 0
-#define MAX_MM 50 
+#define MAX_MM 102
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
