@@ -5,6 +5,7 @@ extern "C"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "driver/adc.h"
+#include "freertos/queue.h"
 }
 
 #include "stepper.hpp"
@@ -23,7 +24,7 @@ extern "C"
 #define STEPPER_TEST_TRAVEL 65     //mm
 
 #define MIN_MM 0
-#define MAX_MM 102
+#define MAX_MM 103
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
@@ -47,11 +48,25 @@ static const char *TAG = "stepper-ctrl"; //tag for logging
 static bool stepp_direction = true;
 static uint32_t posNow = 0;
 
+// queue for sending commands to task handling guide movement
+static QueueHandle_t queue_commandsGuideTask;
 
 
 //----------------------
 //----- functions ------
 //----------------------
+
+//==========================
+//==== guide_moveToZero ====
+//==========================
+//tell stepper-control task to move cable guide to zero position
+void guide_moveToZero(){
+    bool valueToSend = true; // or false
+    xQueueSend(queue_commandsGuideTask, &valueToSend, portMAX_DELAY);
+    ESP_LOGI(TAG, "sending command to stepper_ctl task via queue");
+}
+
+
 //move axis certain Steps (relative) between left and right or reverse when negative
 void travelSteps(int stepsTarget){
 	//TODO simplify this function, one simple calculation of new position?
@@ -117,6 +132,9 @@ void init_stepper() {
 	//TODO unnecessary wrapper?
     ESP_LOGW(TAG, "initializing stepper...");
 	stepper_init();
+    // create queue for sending commands to task handling guide movement
+    // currently length 1 and only one command possible, thus bool
+    queue_commandsGuideTask = xQueueCreate(1, sizeof(bool));
 }
 
 
@@ -131,9 +149,9 @@ void updateSpeedFromAdc() {
 
 
 
-//----------------------------
-//---- TASK stepper-test -----
-//----------------------------
+//============================
+//==== TASK stepper=test =====
+//============================
 #ifndef STEPPER_SIMULATE_ENCODER
 void task_stepper_test(void *pvParameter)
 {
@@ -203,9 +221,9 @@ void task_stepper_test(void *pvParameter)
 
 
 
-//----------------------------
-//----- TASK stepper-ctl -----
-//----------------------------
+//============================
+//===== TASK stepper=ctl =====
+//============================
 #ifdef STEPPER_SIMULATE_ENCODER
 void task_stepper_test(void *pvParameter)
 #else
@@ -240,8 +258,31 @@ void task_stepper_ctl(void *pvParameter)
         encStepsNow = encoder_getSteps();
 #endif
 
+        // move to zero if command received via queue
+        bool receivedValue;
+        if (xQueueReceive(queue_commandsGuideTask, &receivedValue, 0) == pdTRUE)
+        {
+            // Process the received value
+            // TODO support other commands (currently only move to zero possible)
+            ESP_LOGW(TAG, "task: move-to-zero command received via queue, starting move, waiting until position reached");
+            stepper_setTargetPosMm(0);
+            stepper_waitForStop();
+            //reset variables -> start tracking cable movement starting from position zero
+            // ensure stepsDelta is 0
+            encStepsNow = encoder_getSteps();
+            encStepsPrev = encStepsNow;
+            travelStepsPartial = 0;
+            // set locally stored axis position to 0 (used for calculating the target axis coordinate)
+            posNow = 0;
+            ESP_LOGW(TAG, "at position 0, resuming normal cable guiding operation");
+        }
+
         //calculate change
-        encStepsDelta = encStepsNow - encStepsPrev; //FIXME MAJOR BUG: when resetting encoder/length in control task, diff will be huge!
+        encStepsDelta = encStepsNow - encStepsPrev;
+        // check if reset happend without moving to zero before - resulting in huge diff
+        if (encStepsDelta != 0 && encStepsNow == 0){  // this should not happen and causes weird movement
+            ESP_LOGE(TAG, "encoder steps changed to 0 (reset) without previous moveToZero() call, resulting in stepsDelta=%d", encStepsDelta);
+        }
 
         //read potentiometer and normalize (0-1) to get a variable for testing
         potiModifier = (float) gpio_readAdc(ADC_CHANNEL_POTI) / 4095; //0-4095 -> 0-1
@@ -258,8 +299,8 @@ void task_stepper_ctl(void *pvParameter)
         //move axis when ready to move at least 1 step
         if (abs(travelStepsFull) > 1){
             travelStepsPartial = fmod(travelStepsExact, 1); //save remaining partial steps to be added in the next iteration
-            ESP_LOGD(TAG, "cablelen=%.2lf, turns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial);
-            ESP_LOGI(TAG, "MOVING %d steps", travelStepsFull);
+            ESP_LOGI(TAG, "cablelen=%.2lf, turns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial);
+            ESP_LOGD(TAG, "MOVING %d steps", travelStepsFull);
             travelSteps(travelStepsExact);
             encStepsPrev = encStepsNow; //update previous length
         }

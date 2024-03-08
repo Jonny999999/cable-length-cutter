@@ -88,7 +88,8 @@ extern "C" void app_main()
     esp_log_level_set("buzzer", ESP_LOG_ERROR);
     esp_log_level_set("switches-analog", ESP_LOG_WARN);
     esp_log_level_set("control", ESP_LOG_INFO);
-    esp_log_level_set("stepper", ESP_LOG_DEBUG);
+    esp_log_level_set("stepper-driver", ESP_LOG_WARN);
+    esp_log_level_set("stepper-ctrl", ESP_LOG_INFO);
     esp_log_level_set("Dendostepper", ESP_LOG_WARN); //stepper lib
     esp_log_level_set("calc", ESP_LOG_WARN); //stepper lib
 

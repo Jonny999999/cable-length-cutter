@@ -10,3 +10,7 @@ void task_stepper_test(void *pvParameter);
 //task that initializes and controls the stepper motor
 //  - moves stepper according to encoder movement
 void task_stepper_ctl(void *pvParameter);
+
+
+//tell stepper-control task to move cable guide to zero position
+void guide_moveToZero();

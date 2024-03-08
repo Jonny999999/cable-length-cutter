@@ -1,5 +1,6 @@
 #include "control.hpp"
 #include "encoder.hpp"
+#include "guide-stepper.hpp"
 
 
 //====================
@@ -158,6 +159,7 @@ void task_control(void *pvParameter)
         if (SW_RESET.risingEdge) {
             //dont reset when press used for stopping pending auto-cut
             if (controlState != systemState_t::AUTO_CUT_WAITING) {
+                guide_moveToZero();
                 encoder_reset();
                 lengthNow = 0;
                 buzzer.beep(1, 700, 100);
@@ -363,6 +365,7 @@ void task_control(void *pvParameter)
                     //TODO stop if start buttons released?
                     changeState(systemState_t::COUNTING);
                     //TODO reset automatically or wait for manual reset?
+                    guide_moveToZero();
                     encoder_reset();
                     lengthNow = 0;
                     buzzer.beep(1, 700, 100);
