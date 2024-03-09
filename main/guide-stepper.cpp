@@ -32,7 +32,7 @@ extern "C"
 #define SPEED_MAX 60.0 //mm/s
 
 #define D_CABLE 6
-#define D_REEL 160 //actual 170
+#define D_REEL 160
 #define PI 3.14159
 
 
@@ -43,10 +43,14 @@ extern "C"
 //----------------------
 //----- variables ------
 //----------------------
+typedef enum axisDirection_t {LEFT = 0, RIGHT} axisDirection_t;
+
 static const char *TAG = "stepper-ctrl"; //tag for logging
 
-static bool stepp_direction = true;
+static axisDirection_t currentAxisDirection = RIGHT;
 static uint32_t posNow = 0;
+
+static int layerCount = 0;
 
 // queue for sending commands to task handling guide movement
 static QueueHandle_t queue_commandsGuideTask;
@@ -75,17 +79,24 @@ void travelSteps(int stepsTarget){
     int stepsToGo, remaining;
 
     stepsToGo = abs(stepsTarget);
-    if(stepsTarget < 0) stepp_direction = !stepp_direction; //invert direction in reverse mode
+
+    // invert direction in reverse mode (cable gets spooled off reel)
+    if (stepsTarget < 0) {
+    currentAxisDirection = (currentAxisDirection == LEFT) ? RIGHT : LEFT; //toggle between RIGHT<->Left
+    }
 
     while (stepsToGo != 0){
         //--- currently moving right ---
-        if (stepp_direction == true){               //currently moving right
+        if (currentAxisDirection == RIGHT){               //currently moving right
             remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
             if (stepsToGo > remaining){             //new distance will exceed limit
                 stepper_setTargetPosSteps(POS_MAX_STEPS);        //move to limit
 				stepper_waitForStop(1000);
                 posNow = POS_MAX_STEPS;
-                stepp_direction = false;            //change current direction for next iteration
+                currentAxisDirection = LEFT;            //change current direction for next iteration
+                //increment/decrement layer count depending on current cable direction
+                layerCount += (stepsTarget > 0) - (stepsTarget < 0);
+                if (layerCount < 0) layerCount = 0; //negative layers are not possible
                 stepsToGo = stepsToGo - remaining;  //decrease target length by already traveled distance
                 ESP_LOGI(TAG, " --- moved to max -> change direction (L) --- \n ");
             }
@@ -98,13 +109,16 @@ void travelSteps(int stepsTarget){
         }
 
         //--- currently moving left ---
-        else {
+        else if (currentAxisDirection == LEFT){
             remaining = posNow - POS_MIN_STEPS;
             if (stepsToGo > remaining){
                 stepper_setTargetPosSteps(POS_MIN_STEPS);
 				stepper_waitForStop(1000);
                 posNow = POS_MIN_STEPS;
-                stepp_direction = true;
+                currentAxisDirection = RIGHT; //switch direction
+                //increment/decrement layer count depending on current cable direction
+                layerCount += (stepsTarget > 0) - (stepsTarget < 0);
+                if (layerCount < 0) layerCount = 0; //negative layers are not possible
                 stepsToGo = stepsToGo - remaining;
                 ESP_LOGI(TAG, " --- moved to min -> change direction (R) --- \n ");
             }
@@ -116,7 +130,12 @@ void travelSteps(int stepsTarget){
             }
         }
     }
-    if(stepsTarget < 0) stepp_direction = !stepp_direction; //undo inversion of stepp_direction after reverse mode is finished
+
+    // undo inversion of currentAxisDirection after reverse mode is finished
+    if (stepsTarget < 0) {
+    currentAxisDirection = (currentAxisDirection == LEFT) ? RIGHT : LEFT; //toggle between RIGHT<->Left
+    }
+
     return;
 }
 
@@ -230,23 +249,28 @@ void task_stepper_test(void *pvParameter)
 void task_stepper_ctl(void *pvParameter)
 #endif
 {
-    //variables
-    int encStepsNow = 0; //get curret steps of encoder
-    int encStepsPrev = 0; //steps at last check
-    int encStepsDelta = 0; //steps changed since last iteration
+    //-- variables --
+    static int encStepsPrev = 0; //measured encoder steps at last run
+    static double travelStepsPartial = 0; //store resulted remaining partial steps last run
+
+    //temporary variables for calculating required steps, or logging
+    int encStepsNow = 0; //get curretly measured steps of encoder
+    int encStepsDelta = 0; //encoder steps changed since last iteration
 
     double cableLen = 0;
     double travelStepsExact = 0; //steps axis has to travel
-    double travelStepsPartial = 0;
     int travelStepsFull = 0;
     double travelMm = 0;
     double turns = 0;
+    float currentDiameter;
 
     float potiModifier;
 
+    //initialize stepper and define zero-position at task start
     init_stepper();
     stepper_home(MAX_MM);
 
+    //repeatedly read changes in measured cable length and move axis accordingly
     while(1){
 #ifdef STEPPER_SIMULATE_ENCODER
 		//TESTING - simulate encoder using switch
@@ -258,7 +282,7 @@ void task_stepper_ctl(void *pvParameter)
         encStepsNow = encoder_getSteps();
 #endif
 
-        // move to zero if command received via queue
+        // move to zero and reset if command received via queue
         bool receivedValue;
         if (xQueueReceive(queue_commandsGuideTask, &receivedValue, 0) == pdTRUE)
         {
@@ -272,9 +296,10 @@ void task_stepper_ctl(void *pvParameter)
             encStepsNow = encoder_getSteps();
             encStepsPrev = encStepsNow;
             travelStepsPartial = 0;
-            // set locally stored axis position to 0 (used for calculating the target axis coordinate)
+            // set locally stored axis position and counted layers to 0 (used for calculating the target axis coordinate and steps)
             posNow = 0;
-            ESP_LOGW(TAG, "at position 0, resuming normal cable guiding operation");
+            layerCount = 0;
+            ESP_LOGW(TAG, "at position 0, reset variables, resuming normal cable guiding operation");
         }
 
         //calculate change
@@ -290,16 +315,18 @@ void task_stepper_ctl(void *pvParameter)
 
         //calculate steps to move
         cableLen = (double)encStepsDelta * 1000 / ENCODER_STEPS_PER_METER;
-        turns = cableLen / (PI * D_REEL);
+        // diameter increases each layer
+        currentDiameter = D_REEL + D_CABLE * layerCount;  //TODO actually increases in radius per layer -> shoud be x2, but layer is not exactly 1D thick => test this
+        turns = cableLen / (PI * currentDiameter);
         travelMm = turns * D_CABLE;
         travelStepsExact = travelMm * STEPPER_STEPS_PER_MM  +  travelStepsPartial; //convert mm to steps and add not moved partial steps
         travelStepsPartial = 0;
         travelStepsFull = (int)travelStepsExact;
 
-        //move axis when ready to move at least 1 step
+        //move axis when ready to move at least 1 full step
         if (abs(travelStepsFull) > 1){
             travelStepsPartial = fmod(travelStepsExact, 1); //save remaining partial steps to be added in the next iteration
-            ESP_LOGI(TAG, "cablelen=%.2lf, turns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial);
+            ESP_LOGI(TAG, "dCablelen=%.2lf, dTurns=%.2lf, travelMm=%.3lf, travelStepsExact: %.3lf, travelStepsFull=%d, partialStep=%.3lf, totalLayerCount=%d, diameter=%.1f", cableLen, turns, travelMm, travelStepsExact, travelStepsFull, travelStepsPartial, layerCount, currentDiameter);
             ESP_LOGD(TAG, "MOVING %d steps", travelStepsFull);
             travelSteps(travelStepsExact);
             encStepsPrev = encStepsNow; //update previous length

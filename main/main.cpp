@@ -24,7 +24,7 @@ extern "C"
 //=========== functions ===========
 //=================================
 //--- configure output ---
-//function to configure gpio pin as output
+//configure a gpio pin as output
 void gpio_configure_output(gpio_num_t gpio_pin){
     gpio_pad_select_gpio(gpio_pin);
     gpio_set_direction(gpio_pin, GPIO_MODE_OUTPUT);
@@ -74,17 +74,17 @@ void task_buzzer( void * pvParameters ){
 //======================================
 extern "C" void app_main()
 {
-    //init outputs
+    //init outputs and adc
     init_gpios();
 
-    //enable 5V volate regulator
+    //enable 5V volage regulator
     gpio_set_level(GPIO_NUM_17, 1);
 
     //init encoder (global)
     encoder_queue = encoder_init();
     
     //define loglevel
-    esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("*", ESP_LOG_INFO); //default loglevel
     esp_log_level_set("buzzer", ESP_LOG_ERROR);
     esp_log_level_set("switches-analog", ESP_LOG_WARN);
     esp_log_level_set("control", ESP_LOG_INFO);
@@ -101,7 +101,7 @@ extern "C" void app_main()
     //create task for controlling the machine
     xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 4, NULL);
 
-    //create task for controlling the stepper
+    //create task for controlling the steppermotor (linear axis that guids the cable)
     xTaskCreate(task_stepper_ctl, "task_stepper_ctl", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
 #endif
 

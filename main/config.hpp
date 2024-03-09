@@ -48,8 +48,6 @@ extern "C" {
 #define SW_PRESET3 sw_gpio_analog_3
 #define SW_CUT sw_gpio_33
 #define SW_AUTO_CUT sw_gpio_32
-
-//unused but already available evaluated inputs
 //#define ? sw_gpio_34
 
 
@@ -90,7 +88,7 @@ extern "C" {
 #define STEPPER_STEP_PIN		GPIO_NUM_18    //mos1
 #define STEPPER_DIR_PIN			GPIO_NUM_16     //ST3
 //driver settings
-#define STEPPER_STEPS_PER_MM	200/2	//steps/mm (steps-per-rot / slope)
+#define STEPPER_STEPS_PER_MM	200/2	//steps/mm (steps-per-rot / spindle-slope)
 #define STEPPER_SPEED_DEFAULT	20		//mm/s
 #define STEPPER_SPEED_MIN		4		//mm/s  - speed threshold at which stepper immediately starts/stops
 #define STEPPER_ACCEL_INC		3		//steps/s increment per cycle 
@@ -107,6 +105,7 @@ extern "C" {
 //#define ENCODER_TEST
 
 //steps per meter
+//this value is determined experimentally while ENCODER_TEST is enabled
 #define ENCODER_STEPS_PER_METER 2127 //roll-v3-gummi-86.6mm - d=89.8mm
 
 //millimetres added to target length
