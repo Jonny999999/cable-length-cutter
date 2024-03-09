@@ -24,13 +24,14 @@ extern "C"
 #define STEPPER_TEST_TRAVEL 65     //mm
 
 #define MIN_MM 0
-#define MAX_MM 103
+#define MAX_MM 97 //actual reel is 110, but currently guide turned out to stay at max position for too long TODO: cad: guide rolls closer together
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
 #define SPEED_MIN 2.0   //mm/s
-#define SPEED_MAX 60.0 //mm/s
+#define SPEED_MAX 70.0 //mm/s
 
+#define LAYER_THICKNESS_MM 5 //height of one cable layer on reel -> increase in radius
 #define D_CABLE 6
 #define D_REEL 160
 #define PI 3.14159
@@ -299,6 +300,7 @@ void task_stepper_ctl(void *pvParameter)
             // set locally stored axis position and counted layers to 0 (used for calculating the target axis coordinate and steps)
             posNow = 0;
             layerCount = 0;
+            currentAxisDirection = RIGHT;
             ESP_LOGW(TAG, "at position 0, reset variables, resuming normal cable guiding operation");
         }
 
@@ -315,8 +317,8 @@ void task_stepper_ctl(void *pvParameter)
 
         //calculate steps to move
         cableLen = (double)encStepsDelta * 1000 / ENCODER_STEPS_PER_METER;
-        // diameter increases each layer
-        currentDiameter = D_REEL + D_CABLE * layerCount;  //TODO actually increases in radius per layer -> shoud be x2, but layer is not exactly 1D thick => test this
+        // effective diameter increases each layer
+        currentDiameter = D_REEL + LAYER_THICKNESS_MM * 2 * layerCount;
         turns = cableLen / (PI * currentDiameter);
         travelMm = turns * D_CABLE;
         travelStepsExact = travelMm * STEPPER_STEPS_PER_MM  +  travelStepsPartial; //convert mm to steps and add not moved partial steps
