@@ -1,4 +1,6 @@
 #include "switchesAnalog.hpp"
+#include "config.h"
+#include "global.hpp"
 
 #define CHECK_BIT(var,pos) (((var)>>(pos)) & 1) //TODO duplicate code: same macro already used in vfd.cpp
 

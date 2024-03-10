@@ -1,4 +1,6 @@
 #include "vfd.hpp"
+#include "config.h"
+#include "global.hpp"
 
 #define CHECK_BIT(var,pos) (((var)>>(pos)) & 1)
 

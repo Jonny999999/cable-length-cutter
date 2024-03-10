@@ -1,5 +1,6 @@
 #include "display.hpp"
 
+#include "config.h"
 
 //=== variables ===
 static const char *TAG = "display"; //tag for logging
@@ -34,7 +35,7 @@ max7219_t display_init(){
     ESP_ERROR_CHECK(max7219_init_desc(&dev, HOST, MAX7219_MAX_CLOCK_SPEED_HZ, DISPLAY_PIN_NUM_CS));
     ESP_ERROR_CHECK(max7219_init(&dev));
     //0...15
-    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 8)); //TODO add this to config
+    ESP_ERROR_CHECK(max7219_set_brightness(&dev, DISPLAY_BRIGHTNESS));
     return dev;
     //display = dev;
     ESP_LOGI(TAG, "initializing display - done");
@@ -50,7 +51,7 @@ void display_ShowWelcomeMsg(max7219_t dev){
     //show name and date
     ESP_LOGI(TAG, "showing startup message...");
     max7219_clear(&dev);
-    max7219_draw_text_7seg(&dev, 0, "CUTTER  29.09.2022");
+    max7219_draw_text_7seg(&dev, 0, "CUTTER  15.03.2024");
     //                                   1234567812 34 5678
     vTaskDelay(pdMS_TO_TICKS(700));
     //scroll "hello" over 2 displays
@@ -64,7 +65,7 @@ void display_ShowWelcomeMsg(max7219_t dev){
     //noticed rare bug that one display does not initialize / is not configured correctly after start
     //initialize display again after the welcome message in case it did not work the first time
     ESP_ERROR_CHECK(max7219_init(&dev));
-    ESP_ERROR_CHECK(max7219_set_brightness(&dev, 8)); //TODO add this to config
+    ESP_ERROR_CHECK(max7219_set_brightness(&dev, DISPLAY_BRIGHTNESS));
 }
 
 
@@ -83,9 +84,9 @@ handledDisplay::handledDisplay(max7219_t displayDevice, uint8_t posStart_f) {
 
 
 
-//--------------------------------
-//---------- showString ----------
-//--------------------------------
+//================================
+//========== showString ==========
+//================================
 //function that displays a given string on the display
 void handledDisplay::showString(const char * buf, uint8_t pos_f){
     //calculate actual absolute position
@@ -103,11 +104,11 @@ void handledDisplay::showString(const char * buf, uint8_t pos_f){
 
 
 //TODO: blinkStrings() and blink() are very similar - can be optimized?
-//only difficulty currently is the reset behaivor of blinkStrings through showString (blink does not reset)
+//only difficulty is the reset behaivor of blinkStrings through showString (blink does not reset)
 
-//----------------------------------
-//---------- blinkStrings ----------
-//----------------------------------
+//==================================
+//========== blinkStrings ==========
+//==================================
 //function switches between two strings in a given interval
 void handledDisplay::blinkStrings(const char * strOn_f, const char * strOff_f, uint32_t msOn_f, uint32_t msOff_f){
     //copy/update variables
@@ -130,9 +131,9 @@ void handledDisplay::blinkStrings(const char * strOn_f, const char * strOff_f, u
 
 
 
-//-------------------------------
-//------------ blink ------------
-//-------------------------------
+//===============================
+//============ blink ============
+//===============================
 //function triggers certain count and interval of off durations
 void handledDisplay::blink(uint8_t count_f, uint32_t msOn_f, uint32_t msOff_f, const char * strOff_f) {
     //copy/update parameters
@@ -156,9 +157,9 @@ void handledDisplay::blink(uint8_t count_f, uint32_t msOn_f, uint32_t msOff_f, c
 
 
 
-//--------------------------------
-//------------ handle ------------
-//--------------------------------
+//================================
+//============ handle ============
+//================================
 //function that handles time based modes
 //writes text to the 7 segment display depending on the current mode
 void handledDisplay::handle() {

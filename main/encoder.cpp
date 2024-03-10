@@ -8,6 +8,8 @@ extern "C" {
 }
 
 #include "encoder.hpp"
+#include "config.h"
+#include "global.hpp"
 
 
 //----------------------------
@@ -17,10 +19,14 @@ static rotary_encoder_info_t encoder; //encoder device/info
 QueueHandle_t encoder_queue = NULL; //encoder event queue
 
 
+
 //-------------------------
 //------- functions -------
 //-------------------------
-//--- encoder_init ---
+
+//======================
+//==== encoder_init ====
+//======================
 //initialize encoder and return event queue
 QueueHandle_t encoder_init(){
     // esp32-rotary-encoder requires that the GPIO ISR service is installed before calling rotary_encoder_register()
@@ -41,7 +47,9 @@ QueueHandle_t encoder_init(){
 }
 
 
-//--- encoder_getSteps ---
+//========================
+//=== encoder_getSteps ===
+//========================
 //get steps counted since last reset
 int encoder_getSteps(){
     // Poll current position and direction
@@ -52,14 +60,18 @@ int encoder_getSteps(){
 }
 
 
-//--- encoder_getLenMm ---
+//========================
+//=== encoder_getLenMm ===
+//========================
 //get current length in Mm since last reset
 int encoder_getLenMm(){
     return (float)encoder_getSteps() * 1000 / ENCODER_STEPS_PER_METER; 
 }
 
 
-//--- encoder_reset ---
+//=======================
+//==== encoder_reset ====
+//=======================
 //reset counted steps / length to 0
 void encoder_reset(){
     rotary_encoder_reset(&encoder);

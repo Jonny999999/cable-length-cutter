@@ -1,4 +1,6 @@
 #include "cutter.hpp"
+#include "config.h"
+#include "global.hpp"
 
 const char* cutter_stateStr[5] = {"IDLE", "START", "CUTTING", "CANCELED", "TIMEOUT"}; //define strings for logging the state
                                                                           
@@ -39,7 +41,6 @@ void cutter_stop(){
     if(cutter_state != cutter_state_t::IDLE){
         setState(cutter_state_t::CANCELED);
     }
-    //starts motor on state change
 }
 
 
@@ -131,7 +132,6 @@ void cutter_handle(){
     //SW_CUTTER_POS.minOnMs = 10;
     //SW_CUTTER_POS.minOffMs = 10;
 
-
     switch(cutter_state){
         case cutter_state_t::IDLE:
         case cutter_state_t::TIMEOUT:
@@ -142,14 +142,13 @@ void cutter_handle(){
         case cutter_state_t::START:
             //--- moved away from idle position ---
             //if (gpio_get_level(GPIO_CUTTER_POS_SW) == 0){ //contact closed
-            if (SW_CUTTER_POS.state == true) { //contact closed -> not at idle pos
+            if (SW_CUTTER_POS.state == true) { //contact closed -> not at idle pos anymore
                 setState(cutter_state_t::CUTTING);
             }
             //--- timeout ---
             else {
                 checkTimeout();
             }
-
             break;
 
         case cutter_state_t::CUTTING:

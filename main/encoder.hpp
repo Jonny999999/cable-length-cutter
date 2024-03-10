@@ -6,7 +6,6 @@ extern "C" {
 #include <freertos/task.h>
 }
 
-#include "config.hpp"
 
 
 //----------------------------
@@ -32,7 +31,6 @@ int encoder_getSteps();
 //--- encoder_getLenMm ---
 //get current length in Mm since last reset
 int encoder_getLenMm();
-
 
     
 //--- encoder_reset ---

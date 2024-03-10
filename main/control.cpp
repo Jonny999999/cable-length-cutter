@@ -1,22 +1,47 @@
-#include "control.hpp"
+extern "C"
+{
+#include <stdio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_idf_version.h>
+#include "freertos/queue.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "driver/adc.h"
+
+#include "max7219.h"
+
+}
+#include <cmath>
+#include "config.h"
+#include "gpio_evaluateSwitch.hpp"
+#include "gpio_adc.hpp"
+#include "buzzer.hpp"
+#include "vfd.hpp"
+#include "display.hpp"
+#include "cutter.hpp"
 #include "encoder.hpp"
 #include "guide-stepper.hpp"
+#include "global.hpp"
+#include "control.hpp"
 
 
-//--------------------
-//---- variables -----
-//--------------------
+//-----------------------------------------
+//--------------- variables ---------------
+//-----------------------------------------
 static const char *TAG = "control"; //tag for logging
 
+//control
 const char* systemStateStr[7] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "AUTO_CUT_WAITING", "CUTTING", "MANUAL"};
-
 systemState_t controlState = systemState_t::COUNTING;
 static uint32_t timestamp_lastStateChange = 0;
 
+//display
 static char buf_disp1[10];// 8 digits + decimal point + \0
 static char buf_disp2[10];// 8 digits + decimal point + \0
 static char buf_tmp[15];
 
+//track length
 static int lengthNow = 0; //length measured in mm
 static int lengthTarget = 5000; //default target length in mm
 static int lengthRemaining = 0; //(target - now) length needed for reaching the target
@@ -31,9 +56,9 @@ static bool autoCutEnabled = false; //store state of toggle switch (no hotswitch
 
 
 
-//--------------------
-//---- functions -----
-//--------------------
+//-----------------------------------------
+//--------------- functions ---------------
+//-----------------------------------------
 
 //========================
 //===== change State =====
@@ -57,12 +82,13 @@ void changeState (systemState_t stateNew) {
 //=================================
 //===== handle Stop Condition =====
 //=================================
-//function that checks whether start button is released or target is reached (used in multiple states)
-//returns true when stopped, false when no action
+//function that checks whether start button is released or target is reached 
+//and takes according action if so (used in multiple states)
+//returns true when stop condition was met, false when no action required
 bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBot){
     //--- stop conditions ---
     //stop conditions that are checked in any mode
-    //target reached
+    //target reached -> reached state, stop motor, display message
     if (lengthRemaining <= 0 ) {
         changeState(systemState_t::TARGET_REACHED);
         vfd_setState(false);
@@ -71,7 +97,7 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
         buzzer.beep(2, 100, 100);
         return true;
     }
-    //start button released
+    //start button released -> idle state, stop motor, display message
     else if (SW_START.state == false) {
         changeState(systemState_t::COUNTING);
         vfd_setState(false);
@@ -120,7 +146,6 @@ void setDynSpeedLvl(uint8_t lvlMax = 3){
 //task that controls the entire machine
 void task_control(void *pvParameter)
 {
-
     //-- initialize display --
     max7219_t two7SegDisplays = display_init();
     //create two separate custom handled display instances
@@ -132,13 +157,16 @@ void task_control(void *pvParameter)
     //currently show name and date and scrolling 'hello'
     display_ShowWelcomeMsg(two7SegDisplays);
 
-
-    //===== loop =====
+    // ##############################
+    // ######## control loop ########
+    // ##############################
+    // repeatedly handle the machine
     while(1){
         vTaskDelay(10 / portTICK_PERIOD_MS);
 
+
         //------ handle switches ------
-        //run handle functions for all switches
+        //run handle functions for all switches used here
         SW_START.handle();
         SW_RESET.handle();
         SW_SET.handle();
@@ -224,7 +252,7 @@ void task_control(void *pvParameter)
             buzzer.beep(3, 100, 60);
         }
 
-        //##### custom target length using poti #####
+        //##### SET switch #####
         //set target length to poti position when SET switch is pressed
         if (SW_SET.state == true) {
             //read adc
@@ -409,11 +437,11 @@ void task_control(void *pvParameter)
         }
 
 
-
+#ifdef ENCODER_TEST
         //--------------------------
         //------ encoder test ------
         //--------------------------
-#ifdef ENCODER_TEST
+        //mode for calibrating the cable length measurement (determine ENCODER_STEPS_PER_METER in config.h)
         //run display handle functions
         displayTop.handle();
         displayBot.handle();
@@ -432,7 +460,7 @@ void task_control(void *pvParameter)
                 lengthBeeped = lengthNow;
             }
         }
-#else
+#else //not in encoder calibration mode
 
         //--------------------------
         //-------- display1 --------
@@ -451,7 +479,6 @@ void task_control(void *pvParameter)
             sprintf(buf_disp1, "%.9s", buf_tmp);
             displayTop.showString(buf_disp1);
         }
-
 
         //--------------------------
         //-------- display2 --------
@@ -485,6 +512,7 @@ void task_control(void *pvParameter)
             displayBot.showString(buf_tmp);
         }
 
+#endif // end else ifdef ENCODER_TEST
 
         //----------------------------
         //------- control lamp -------
@@ -501,10 +529,6 @@ void task_control(void *pvParameter)
             gpio_set_level(GPIO_LAMP, 0);
         }
 
-
-
-#endif
-        
     } //end while(1)
 
 } //end task_control

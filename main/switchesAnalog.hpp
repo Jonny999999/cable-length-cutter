@@ -8,7 +8,6 @@ extern "C"
 #include <math.h>
 }
 
-#include "config.hpp"
 #include "gpio_adc.hpp"
 
 

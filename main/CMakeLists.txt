@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS 
         "main.cpp"
-        "config.cpp"
+        "global.cpp"
         "control.cpp"
         "buzzer.cpp"
         "vfd.cpp"

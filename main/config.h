@@ -1,11 +1,8 @@
 #pragma once
-extern "C" {
-#include "driver/adc.h"
-}
-#include "gpio_evaluateSwitch.hpp"
-#include "buzzer.hpp"
-#include "switchesAnalog.hpp"
 
+#include "esp_idf_version.h"
+
+//note: global variables and objects were moved to global.hpp
 
 //===================================
 //===== define output gpio pins =====
@@ -49,6 +46,7 @@ extern "C" {
 #define SW_CUT sw_gpio_33
 #define SW_AUTO_CUT sw_gpio_32
 //#define ? sw_gpio_34
+//note: actual objects are created in global.cpp
 
 
 
@@ -68,6 +66,7 @@ extern "C" {
 #define DISPLAY_PIN_NUM_CLK GPIO_NUM_22
 #define DISPLAY_PIN_NUM_CS GPIO_NUM_27
 #define DISPLAY_DELAY 2000
+#define DISPLAY_BRIGHTNESS 8
 
 //--------------------------
 //----- encoder config -----
@@ -100,7 +99,7 @@ extern "C" {
 //--------------------------
 //------ calibration -------
 //--------------------------
-//enable mode  encoder test for calibration
+//enable mode  encoder test for calibration (determine ENCODER_STEPS_PER_METER)
 //if defined, displays always show length and steps instead of the normal messages
 //#define ENCODER_TEST
 
@@ -118,26 +117,3 @@ extern "C" {
 
 
 
-//============================
-//===== global variables =====
-//============================
-//create global evaluated switch objects
-//--- switches on digital gpio pins ---
-//extern gpio_evaluatedSwitch sw_gpio_39;
-extern gpio_evaluatedSwitch sw_gpio_34;
-extern gpio_evaluatedSwitch sw_gpio_32;
-extern gpio_evaluatedSwitch sw_gpio_33;
-extern gpio_evaluatedSwitch sw_gpio_25;
-extern gpio_evaluatedSwitch sw_gpio_26;
-extern gpio_evaluatedSwitch sw_gpio_14;
-
-//--- switches connected to 4-sw-to-analog stripboard ---
-extern gpio_evaluatedSwitch sw_gpio_analog_0;
-extern gpio_evaluatedSwitch sw_gpio_analog_1;
-extern gpio_evaluatedSwitch sw_gpio_analog_2;
-extern gpio_evaluatedSwitch sw_gpio_analog_3;
-
-
-
-//create global buzzer object
-extern buzzer_t buzzer;

@@ -9,7 +9,6 @@ extern "C"
 #include "esp_log.h"
 }
 
-#include "config.hpp"
 
 //enum defining motor direction
 typedef enum vfd_direction_t {FWD, REV} vfd_direction_t;

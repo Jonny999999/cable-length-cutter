@@ -10,7 +10,8 @@ extern "C"
 #include "driver/adc.h"
 }
 
-#include "config.hpp"
+#include "config.h"
+#include "global.hpp"
 #include "control.hpp"
 #include "buzzer.hpp"
 #include "switchesAnalog.hpp"
@@ -23,7 +24,10 @@ extern "C"
 //=================================
 //=========== functions ===========
 //=================================
+
+//------------------------
 //--- configure output ---
+//------------------------
 //configure a gpio pin as output
 void gpio_configure_output(gpio_num_t gpio_pin){
     gpio_pad_select_gpio(gpio_pin);
@@ -31,7 +35,9 @@ void gpio_configure_output(gpio_num_t gpio_pin){
 }
 
 
-//--- init gpios ---
+//--------------------
+//---- init gpios ----
+//--------------------
 void init_gpios(){
     //--- outputs ---
     //4x stepper mosfets
@@ -77,7 +83,7 @@ extern "C" void app_main()
     //init outputs and adc
     init_gpios();
 
-    //enable 5V volage regulator
+    //enable 5V volage regulator (needed for display)
     gpio_set_level(GPIO_NUM_17, 1);
 
     //init encoder (global)
@@ -94,14 +100,14 @@ extern "C" void app_main()
     esp_log_level_set("calc", ESP_LOG_WARN); //stepper lib
 
 #ifdef STEPPER_TEST
-    //create task for stepper testing
+    //create task for testing the stepper motor
     xTaskCreate(task_stepper_test, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
     //xTaskCreate(task_stepper_debug, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
 #else
     //create task for controlling the machine
     xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 4, NULL);
 
-    //create task for controlling the steppermotor (linear axis that guids the cable)
+    //create task for controlling the stepper motor (linear axis that guids the cable)
     xTaskCreate(task_stepper_ctl, "task_stepper_ctl", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
 #endif
 

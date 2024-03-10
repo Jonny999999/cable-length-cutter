@@ -1,5 +1,6 @@
 //custom driver for stepper motor
-#include "config.hpp"
+#include "config.h"
+#include "global.hpp"
 #include "hal/timer_types.h"
 #include <cstdint>
 #include <inttypes.h>
@@ -14,7 +15,7 @@ extern "C" {
 //=====================
 //=== configuration ===
 //=====================
-//used macros from config.hpp:
+//used macros from config.h:
 //#define STEPPER_STEP_PIN GPIO_NUM_18    //mos1
 //#define STEPPER_DIR_PIN GPIO_NUM_16     //ST3
 
