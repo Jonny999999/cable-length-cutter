@@ -160,7 +160,7 @@ void stepper_waitForStop(uint32_t timeoutMs){
 //Currently simply runs stepper for travelMm and bumps into hardware limit
 void stepper_home(uint32_t travelMm){
 	//TODO add timeout, limitswitch...
-	ESP_LOGW(TAG, "initiate auto-home...");
+	ESP_LOGW(TAG, "initiate auto-home, moving %d mm...", travelMm);
 	posNow = travelMm * STEPPER_STEPS_PER_MM;
 	while (posNow != 0){
 		//reactivate just in case stopped by other call to prevent deadlock

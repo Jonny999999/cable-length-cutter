@@ -27,6 +27,12 @@
 #define ADC_CHANNEL_POTI ADC1_CHANNEL_0
 #define GPIO_4SW_TO_ANALOG GPIO_NUM_39
 #define ADC_CHANNEL_4SW_TO_ANALOG ADC1_CHANNEL_3 //gpio 39
+
+#define ADC_CHANNEL ADC_CHANNEL_0
+//#define ADC_LOW_VOLTAGE_THRESHOLD 1000 //adc value where shut down is detected (store certain values before power loss)
+#define GPIO_PIN GPIO_NUM_2
+
+#define ADC_CHANNEL_SUPPLY_VOLTAGE ADC1_CHANNEL_7//gpio35 onboard supply voltage
 //ADC1_CHANNEL_0 gpio36
 //ADC1_CHANNEL_6 gpio_34
 //ADC1_CHANNEL_3 gpio_39
@@ -87,8 +93,8 @@
 #define STEPPER_STEP_PIN		GPIO_NUM_18    //mos1
 #define STEPPER_DIR_PIN			GPIO_NUM_16     //ST3
 //driver settings
-#define STEPPER_STEPS_PER_MM	200/2	//steps/mm (steps-per-rot / spindle-slope)
-#define STEPPER_SPEED_DEFAULT	20		//mm/s
+#define STEPPER_STEPS_PER_MM	(200/2)	//steps/mm (steps-per-rot / spindle-slope)
+#define STEPPER_SPEED_DEFAULT	25		//mm/s
 #define STEPPER_SPEED_MIN		4		//mm/s  - speed threshold at which stepper immediately starts/stops
 #define STEPPER_ACCEL_INC		3		//steps/s increment per cycle 
 #define STEPPER_DECEL_INC		7		//steps/s decrement per cycle

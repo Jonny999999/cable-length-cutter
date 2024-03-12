@@ -11,6 +11,7 @@ idf_component_register(
 		"stepper.cpp"
         "guide-stepper.cpp"
         "encoder.cpp"
+        "shutdown.cpp"
     INCLUDE_DIRS 
         "."
     )
