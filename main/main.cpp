@@ -8,6 +8,7 @@ extern "C"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/adc.h"
+
 }
 
 #include "config.h"
@@ -17,6 +18,7 @@ extern "C"
 #include "switchesAnalog.hpp"
 #include "guide-stepper.hpp"
 #include "encoder.hpp"
+#include "shutdown.hpp"
 
 #include "stepper.hpp"
 
@@ -59,6 +61,8 @@ void init_gpios(){
     //initialize and configure ADC
     adc1_config_width(ADC_WIDTH_BIT_12); //=> max resolution 4096
     adc1_config_channel_atten(ADC_CHANNEL_POTI, ADC_ATTEN_DB_11); //max voltage
+
+    adc1_config_channel_atten(ADC_CHANNEL_SUPPLY_VOLTAGE, ADC_ATTEN_DB_11); //max voltage
 }
 
 
@@ -95,15 +99,21 @@ extern "C" void app_main()
     esp_log_level_set("switches-analog", ESP_LOG_WARN);
     esp_log_level_set("control", ESP_LOG_INFO);
     esp_log_level_set("stepper-driver", ESP_LOG_WARN);
-    esp_log_level_set("stepper-ctrl", ESP_LOG_INFO);
+    esp_log_level_set("stepper-ctrl", ESP_LOG_WARN);
     esp_log_level_set("Dendostepper", ESP_LOG_WARN); //stepper lib
     esp_log_level_set("calc", ESP_LOG_WARN); //stepper lib
+    esp_log_level_set("lowVoltage", ESP_LOG_INFO);
 
 #ifdef STEPPER_TEST
     //create task for testing the stepper motor
     xTaskCreate(task_stepper_test, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
     //xTaskCreate(task_stepper_debug, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
 #else
+    //create task for detecting power-off
+    xTaskCreate(&task_shutDownDetection, "task_shutdownDet", 2048, NULL, 2, NULL);
+    // wait for nvs to be initialized in shutDownDetection task
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+
     //create task for controlling the machine
     xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 4, NULL);
 

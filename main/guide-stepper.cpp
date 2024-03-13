@@ -13,8 +13,11 @@ extern "C"
 #include "global.hpp"
 #include "guide-stepper.hpp"
 #include "encoder.hpp"
+#include "shutdown.hpp"
 
 
+//macro to get smaller value out of two
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 //---------------------
 //--- configuration ---
@@ -24,13 +27,20 @@ extern "C"
 
 #define STEPPER_TEST_TRAVEL 65     // mm
 
-#define MIN_MM 0
-#define MAX_MM 97 //actual reel is 110, but currently guide turned out to stay at max position for too long TODO: cad: guide rolls closer together
+#define MIN_MM 0 //TODO add feature so guide stays at zero for some steps (negative MIN_MM?), currently seems appropriate for even winding
+#define MAX_MM 95 //actual reel is 110, but currently guide turned out to stay at max position for too long
 #define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
 #define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
 
+//tolerance added to last stored position at previous shutdown.
+//When calibrating at startup the stepper moves for that sum to get track of zero position (ensure crashes into hardware limit for at least some time)
+#define AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM 20
+#define MAX_TOTAL_AXIS_TRAVEL_MM 103 //max possible travel distance, needed for auto-home
+
+// speeds for testing with potentiometer (test task only)
 #define SPEED_MIN 2.0   // mm/s
 #define SPEED_MAX 70.0  // mm/s
+//note: actual speed is currently defined in config.h with STEPPER_SPEED_DEFAULT
 
 #define LAYER_THICKNESS_MM 5 //height of one cable layer on reel -> increase in radius
 #define D_CABLE 6
@@ -61,6 +71,16 @@ static QueueHandle_t queue_commandsGuideTask;
 //----------------------
 //----- functions ------
 //----------------------
+
+//=============================
+//=== guide_getAxisPosSteps ===
+//=============================
+// return local variable posNow
+// needed at shutdown detection to store last axis position in nvs
+int guide_getAxisPosSteps(){
+    return posNow;
+}
+
 
 //==========================
 //==== guide_moveToZero ====
@@ -281,9 +301,23 @@ void task_stepper_ctl(void *pvParameter)
     float currentDiameter;
 
 
-    //initialize stepper and define zero-position at task start
+
+    //initialize stepper at task start
     init_stepper();
-    stepper_home(MAX_MM);
+    //define zero-position
+    // use last known position stored at last shutdown to reduce time crashing into hardware limit
+    int posLastShutdown = nvsReadLastAxisPosSteps();
+    if (posLastShutdown >= 0)
+    { // would be -1 when failed
+        ESP_LOGW(TAG, "auto-home: considerting pos last shutdown %dmm + tolerance %dmm",
+        posLastShutdown / STEPPER_STEPS_PER_MM, 
+        AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM);
+        // home considering last position and offset, but limit to max distance possible
+        stepper_home(MIN((posLastShutdown/STEPPER_STEPS_PER_MM + AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM), MAX_TOTAL_AXIS_TRAVEL_MM));
+    }
+    else { // default to max travel when read from nvs failed
+        stepper_home(MAX_TOTAL_AXIS_TRAVEL_MM);
+    }
 
     //repeatedly read changes in measured cable length and move axis accordingly
     while(1){

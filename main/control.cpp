@@ -446,17 +446,21 @@ void task_control(void *pvParameter)
         displayTop.handle();
         displayBot.handle();
         //-- show encoder steps on display1 ---
-        sprintf(buf_disp1, "EN %05d", encoder_getSteps); //count
+        sprintf(buf_disp1, "EN %05d", encoder_getSteps()); //count
         displayTop.showString(buf_disp1);
         //--- show converted distance on display2 ---
         sprintf(buf_disp2, "Met %5.3f", (float)lengthNow/1000); //m
         displayBot.showString(buf_disp2);
-        //--- beep every 1m ---
-        //note: only works precicely in forward/positive direction
-        if (lengthNow % 1000 < 50) { //with tolerance in case of missed exact value
-            if (fabs(lengthNow - lengthBeeped) >= 900) { //dont beep multiple times at same meter
-                //TODO: add case for reverse direction. currently beeps 0.1 too early
-                buzzer.beep(1, 400, 100 );
+        //--- beep every 0.5m ---
+        //note: only works precisely in forward/positive direction, in reverse it it beeps by tolerance too early
+        static int lengthBeeped = 0;
+        if (lengthNow % 500 < 50) { //with tolerance in case of missed exact value
+            if (fabs(lengthNow - lengthBeeped) >= 400) { //dont beep multiple times at same distance
+                //TODO: add case for reverse direction. currently beeps 50mm too early
+                if (lengthNow % 1000 < 50) // 1m beep
+                    buzzer.beep(1, 400, 100);
+                else // 0.5m beep
+                    buzzer.beep(1, 200, 100);
                 lengthBeeped = lengthNow;
             }
         }

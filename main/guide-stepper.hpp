@@ -14,3 +14,7 @@ void task_stepper_ctl(void *pvParameter);
 
 //tell stepper-control task to move cable guide to zero position
 void guide_moveToZero();
+
+// return local variable posNow that stores the current position of cable guide axis in steps
+// needed by shutdown to store last axis position in nvs
+int guide_getAxisPosSteps();
