@@ -108,16 +108,18 @@
 //enable mode  encoder test for calibration (determine ENCODER_STEPS_PER_METER)
 //if defined, displays always show length and steps instead of the normal messages
 //#define ENCODER_TEST
+//TODO: add way to calibrate without flashing -> enter calibration mode with certain button sequence, enter steps-per-meter with poti, store in nvs
 
 //steps per meter
 //this value is determined experimentally while ENCODER_TEST is enabled
-#define ENCODER_STEPS_PER_METER 2127 //roll-v3-gummi-86.6mm - d=89.8mm
+//#define ENCODER_STEPS_PER_METER 2127 //until 2024.03.13 roll-v3-gummi-86.6mm - d=89.8mm
+#define ENCODER_STEPS_PER_METER 2118 //2024.03.13 roll-v3-gummi measured 86.5mm
 
-//millimetres added to target length
+//millimeters added to target length
 //to ensure that length does not fall short when spool slightly rotates back after stop
 #define TARGET_LENGTH_OFFSET 0
 
-//millimetres lengthNow can be below lengthTarget to still stay in target_reached state
+//millimeters lengthNow can be below lengthTarget to still stay in target_reached state
 #define TARGET_REACHED_TOLERANCE 5
 
 
