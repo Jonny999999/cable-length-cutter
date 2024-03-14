@@ -11,6 +11,7 @@ extern "C"
 }
 
 #include "config.h"
+#include "encoder.hpp"
 #include "shutdown.hpp"
 
 #include "guide-stepper.hpp"
@@ -34,8 +35,26 @@ void nvsWriteLastAxisPos(uint32_t value)
         ESP_LOGE(TAG, "nvs: failed committing updates");
     else
         ESP_LOGI(TAG, "nvs: successfully committed updates");
-    ESP_LOGW(TAG, "updated value in nvs to %d", value);
+    ESP_LOGW(TAG, "updated value 'lastPosSteps' in nvs to %d", value);
 }
+
+
+// store a u32 value in nvs as "lastEncoderSteps"
+// TODO remove duplicate code
+void nvsWriteLastEncoderSteps(uint32_t value)
+{
+    // update nvs value
+    esp_err_t err = nvs_set_u32(nvsHandle, "lastEncoderSteps", value);
+    if (err != ESP_OK)
+        ESP_LOGE(TAG, "nvs: failed writing");
+    err = nvs_commit(nvsHandle);
+    if (err != ESP_OK)
+        ESP_LOGE(TAG, "nvs: failed committing updates");
+    else
+        ESP_LOGI(TAG, "nvs: successfully committed updates");
+    ESP_LOGW(TAG, "updated value 'lastEncoderSteps' in nvs to %d", value);
+}
+
 
 
 
@@ -52,6 +71,29 @@ int nvsReadLastAxisPosSteps()
         break;
     case ESP_ERR_NVS_NOT_FOUND:
         ESP_LOGE(TAG, "nvs: the value '%s' is not initialized yet", "lastPosSteps");
+        return -1;
+        break;
+    default:
+        ESP_LOGE(TAG, "Error (%s) reading nvs!", esp_err_to_name(err));
+        return -1;
+    }
+}
+
+
+// read "lastEncoderSteps" from nvs, returns -1 if failed
+// TODO remove duplicate code
+int nvsReadLastEncoderSteps()
+{
+    uint32_t valueRead;
+    esp_err_t err = nvs_get_u32(nvsHandle, "lastEncoderSteps", &valueRead);
+    switch (err)
+    {
+    case ESP_OK:
+        ESP_LOGW(TAG, "Successfully read value %d from nvs", valueRead);
+        return valueRead;
+        break;
+    case ESP_ERR_NVS_NOT_FOUND:
+        ESP_LOGE(TAG, "nvs: the value '%s' is not initialized yet", "lastEncoderSteps");
         return -1;
         break;
     default:
@@ -101,7 +143,8 @@ void task_shutDownDetection(void *pvParameter)
             // write to nvs and log once at change to below
             if (!voltageBelowThreshold){
                 nvsWriteLastAxisPos(guide_getAxisPosSteps());
-                ESP_LOGE(TAG, "voltage now below threshold!  now=%d threshold=%d -> wrote last axis-pos to nvs", adc_reading, ADC_LOW_VOLTAGE_THRESHOLD);
+                nvsWriteLastEncoderSteps(encoder_getSteps());
+                ESP_LOGE(TAG, "voltage now below threshold!  now=%d threshold=%d -> wrote last axis-pos and encoder-steps to nvs", adc_reading, ADC_LOW_VOLTAGE_THRESHOLD);
                 voltageBelowThreshold = true;
             }
         }

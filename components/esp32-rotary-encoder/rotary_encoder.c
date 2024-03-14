@@ -343,3 +343,20 @@ esp_err_t rotary_encoder_reset(rotary_encoder_info_t * info)
     }
     return err;
 }
+
+esp_err_t rotary_encoder_set_position(rotary_encoder_info_t * info, uint32_t posNew)
+{
+    esp_err_t err = ESP_OK;
+    if (info)
+    {
+        ESP_LOGI(TAG, "changing rotary encoder position from %d to %d steps", info->state.position, posNew);
+        info->state.position = posNew;
+        info->state.direction = ROTARY_ENCODER_DIRECTION_NOT_SET;
+    }
+    else
+    {
+        ESP_LOGE(TAG, "info is NULL");
+        err = ESP_ERR_INVALID_ARG;
+    }
+    return err;
+}

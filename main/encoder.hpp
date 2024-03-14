@@ -4,6 +4,7 @@
 #pragma once
 extern "C" {
 #include <freertos/task.h>
+#include "freertos/queue.h"
 }
 
 
@@ -36,3 +37,7 @@ int encoder_getLenMm();
 //--- encoder_reset ---
 //reset counted steps / length to 0
 void encoder_reset();
+
+//--- encoder_setPos ---
+//set encoder position to certain Steps
+void encoder_setPos(uint32_t posNew);

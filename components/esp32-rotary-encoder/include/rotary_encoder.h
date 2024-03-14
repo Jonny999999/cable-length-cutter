@@ -164,6 +164,13 @@ esp_err_t rotary_encoder_get_state(const rotary_encoder_info_t * info, rotary_en
  */
 esp_err_t rotary_encoder_reset(rotary_encoder_info_t * info);
 
+/**
+ * @brief Set the current position of the rotary encoder to passed value.
+ * @param[in] info Pointer to initialised rotary encoder info structure.
+ * @return ESP_OK if successful, ESP_FAIL or ESP_ERR_* if an error occurred.
+ */
+esp_err_t rotary_encoder_set_position(rotary_encoder_info_t * info, uint32_t posNew);
+
 
 #ifdef __cplusplus
 }

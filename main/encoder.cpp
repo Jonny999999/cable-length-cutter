@@ -77,3 +77,12 @@ void encoder_reset(){
     rotary_encoder_reset(&encoder);
     return;
 }    
+
+//========================
+//==== encoder_setPos ====
+//========================
+//set encoder position to certain Steps
+void encoder_setPos(uint32_t posNew){
+    rotary_encoder_set_position(&encoder, posNew);
+    return;
+}

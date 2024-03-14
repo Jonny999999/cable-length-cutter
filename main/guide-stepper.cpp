@@ -64,6 +64,11 @@ static uint32_t posNow = 0;
 
 static int layerCount = 0;
 
+// store optimal distance traveled when homing (determined by last pos in nvs)
+static int homeTravelDistance = MAX_TOTAL_AXIS_TRAVEL_MM;
+// track if already homed (either homes at startup or at first reset when there is still cable on the reel)
+static bool axisIsHomed = false;
+
 // queue for sending commands to task handling guide movement
 static QueueHandle_t queue_commandsGuideTask;
 
@@ -87,7 +92,13 @@ int guide_getAxisPosSteps(){
 //==========================
 //tell stepper-control task to move cable guide to zero position
 void guide_moveToZero(){
-    bool valueToSend = true; // or false
+    //home axis first if not done already at startup
+    if (!axisIsHomed){
+        ESP_LOGW(TAG, "moveToZero: Axis not homed yet due to high previous length -> homing now");
+        stepper_home(homeTravelDistance);
+        axisIsHomed = true;
+    }
+    bool valueToSend = true; // or false - currently not relevant
     xQueueSend(queue_commandsGuideTask, &valueToSend, portMAX_DELAY);
     ESP_LOGI(TAG, "sending command to stepper_ctl task via queue");
 }
@@ -100,7 +111,7 @@ void guide_moveToZero(){
 void travelSteps(int stepsTarget){
 	//TODO simplify this function, one simple calculation of new position?
 	//with new custom driver no need to detect direction change
-	
+
     int stepsToGo, remaining;
 
     stepsToGo = abs(stepsTarget);
@@ -162,6 +173,32 @@ void travelSteps(int stepsTarget){
     }
 
     return;
+}
+
+
+//------------------------
+//---- lengthToLayers ----
+//------------------------
+// calculate cable layers on reel from a certain cable length
+// TODO: currently assumes windingWidth is constant (MAX_MM)
+uint16_t lengthToLayers(float lengthMm){
+    float windingWidth = MAX_MM;
+    uint16_t layerCount = 0;
+    //cable length required for one layer
+    float lenNextLayer = (PI * D_REEL) * (windingWidth / D_CABLE);
+    uint32_t lengthRemaining = lengthMm;
+
+    while (lengthRemaining >= lenNextLayer){
+        float lenThisLayer = lenNextLayer; 
+        lengthRemaining -= lenThisLayer;
+        layerCount++;
+
+        float currentDiameter = D_REEL + LAYER_THICKNESS_MM * 2 * layerCount;
+        lenNextLayer = (PI * currentDiameter) * windingWidth/D_CABLE;
+    }
+
+    ESP_LOGI(TAG, "lengthToLayers: calculated %d layers from length=%.1fm, windWidth=%.1fmm, D-cable=%dmm, D-start=%dmm", layerCount, lengthMm/1000, windingWidth, D_CABLE, D_REEL);
+    return layerCount;
 }
 
 
@@ -302,9 +339,10 @@ void task_stepper_ctl(void *pvParameter)
 
 
 
-    //initialize stepper at task start
+    //-- initialize stepper --
     init_stepper();
-    //define zero-position
+
+    //-- consider axis-position at last shutdown --
     // use last known position stored at last shutdown to reduce time crashing into hardware limit
     int posLastShutdown = nvsReadLastAxisPosSteps();
     if (posLastShutdown >= 0)
@@ -313,10 +351,24 @@ void task_stepper_ctl(void *pvParameter)
         posLastShutdown / STEPPER_STEPS_PER_MM, 
         AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM);
         // home considering last position and offset, but limit to max distance possible
-        stepper_home(MIN((posLastShutdown/STEPPER_STEPS_PER_MM + AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM), MAX_TOTAL_AXIS_TRAVEL_MM));
+         homeTravelDistance = MIN((posLastShutdown/STEPPER_STEPS_PER_MM + AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM), MAX_TOTAL_AXIS_TRAVEL_MM);
     }
     else { // default to max travel when read from nvs failed
         stepper_home(MAX_TOTAL_AXIS_TRAVEL_MM);
+        homeTravelDistance = MAX_TOTAL_AXIS_TRAVEL_MM; //note: is default value anyways
+    }
+
+    //-- consider measured length at last shutdown --
+    //read length at last power-off
+    int encoderPosLastShutdown = nvsReadLastEncoderSteps();
+    // when significant length stored: calculate layer count, dont home stepper yet (only at next RESET button press)
+    if (encoderPosLastShutdown > 2*ENCODER_STEPS_PER_METER){
+        layerCount = lengthToLayers((float)encoderPosLastShutdown/ENCODER_STEPS_PER_METER * 1000);
+        ESP_LOGW(TAG, "last stored length is %.1fm -> set layer count to %d", (float)encoderPosLastShutdown/ENCODER_STEPS_PER_METER, layerCount);
+    }
+    else { //last stored length is not significant: home stepper
+        stepper_home(homeTravelDistance);
+        axisIsHomed = true;
     }
 
     //repeatedly read changes in measured cable length and move axis accordingly

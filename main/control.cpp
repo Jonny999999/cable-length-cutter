@@ -24,6 +24,7 @@ extern "C"
 #include "guide-stepper.hpp"
 #include "global.hpp"
 #include "control.hpp"
+#include "shutdown.hpp"
 
 
 //-----------------------------------------
@@ -156,6 +157,15 @@ void task_control(void *pvParameter)
     //display welcome message on two 7 segment displays
     //currently show name and date and scrolling 'hello'
     display_ShowWelcomeMsg(two7SegDisplays);
+
+    //-- consider previous length from nvs -- 
+    //read stored length from last shutdown
+    int encoderPosLastShutdown = nvsReadLastEncoderSteps();
+    // apply stored length when significant
+    if (encoderPosLastShutdown > 2*ENCODER_STEPS_PER_METER){
+        encoder_setPos(encoderPosLastShutdown);
+        ESP_LOGW(TAG, "set encoder to last known steps %d (from last shutdown)", encoderPosLastShutdown);
+    }
 
     // ##############################
     // ######## control loop ########
