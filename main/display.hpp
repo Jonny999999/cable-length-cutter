@@ -16,9 +16,8 @@ extern "C"
 #include <cstring>
 
 
-#include "config.hpp"
 
-//function for initializing the display using configuration from macros in config.hpp
+//function for initializing the display using configuration from macros in config.h
 max7219_t display_init();
 
 //show welcome message on the entire display
@@ -44,8 +43,8 @@ class handledDisplay {
         //TODO: blinkStrings and blink are very similar - optimize?
         //TODO: add 'scroll string' method
 
-    private:
 
+    private:
         //--- variables ---
         //config
         max7219_t dev;

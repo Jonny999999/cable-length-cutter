@@ -1,4 +1,5 @@
-#include "config.hpp"
+#include "global.hpp"
+#include "config.h"
 
 
 //--- inputs ---

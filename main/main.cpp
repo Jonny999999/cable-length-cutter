@@ -8,26 +8,38 @@ extern "C"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/adc.h"
+
 }
 
-#include "config.hpp"
+#include "config.h"
+#include "global.hpp"
 #include "control.hpp"
 #include "buzzer.hpp"
 #include "switchesAnalog.hpp"
+#include "guide-stepper.hpp"
+#include "encoder.hpp"
+#include "shutdown.hpp"
+
+#include "stepper.hpp"
 
 
 //=================================
 //=========== functions ===========
 //=================================
+
+//------------------------
 //--- configure output ---
-//function to configure gpio pin as output
+//------------------------
+//configure a gpio pin as output
 void gpio_configure_output(gpio_num_t gpio_pin){
     gpio_pad_select_gpio(gpio_pin);
     gpio_set_direction(gpio_pin, GPIO_MODE_OUTPUT);
 }
 
 
-//--- init gpios ---
+//--------------------
+//---- init gpios ----
+//--------------------
 void init_gpios(){
     //--- outputs ---
     //4x stepper mosfets
@@ -49,6 +61,8 @@ void init_gpios(){
     //initialize and configure ADC
     adc1_config_width(ADC_WIDTH_BIT_12); //=> max resolution 4096
     adc1_config_channel_atten(ADC_CHANNEL_POTI, ADC_ATTEN_DB_11); //max voltage
+
+    adc1_config_channel_atten(ADC_CHANNEL_SUPPLY_VOLTAGE, ADC_ATTEN_DB_11); //max voltage
 }
 
 
@@ -70,20 +84,43 @@ void task_buzzer( void * pvParameters ){
 //======================================
 extern "C" void app_main()
 {
-    //init outputs
+    //init outputs and adc
     init_gpios();
 
-    //enable 5V volate regulator
+    //enable 5V volage regulator (needed for display)
     gpio_set_level(GPIO_NUM_17, 1);
 
+    //init encoder (global)
+    encoder_queue = encoder_init();
+    
     //define loglevel
-    esp_log_level_set("*", ESP_LOG_INFO);
+    esp_log_level_set("*", ESP_LOG_INFO); //default loglevel
     esp_log_level_set("buzzer", ESP_LOG_ERROR);
     esp_log_level_set("switches-analog", ESP_LOG_WARN);
     esp_log_level_set("control", ESP_LOG_INFO);
+    esp_log_level_set("stepper-driver", ESP_LOG_WARN);
+    esp_log_level_set("stepper-ctrl", ESP_LOG_WARN);
+    esp_log_level_set("Dendostepper", ESP_LOG_WARN); //stepper lib
+    esp_log_level_set("calc", ESP_LOG_WARN); //stepper lib
+    esp_log_level_set("lowVoltage", ESP_LOG_INFO);
+
+#ifdef STEPPER_TEST
+    //create task for testing the stepper motor
+    xTaskCreate(task_stepper_test, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
+    //xTaskCreate(task_stepper_debug, "task_stepper_test", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
+#else
+    //create task for detecting power-off
+    xTaskCreate(&task_shutDownDetection, "task_shutdownDet", 2048, NULL, 2, NULL);
+    // wait for nvs to be initialized in shutDownDetection task
+    vTaskDelay(50 / portTICK_PERIOD_MS);
 
     //create task for controlling the machine
-    xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
+    xTaskCreate(task_control, "task_control", configMINIMAL_STACK_SIZE * 3, NULL, 4, NULL);
+
+    //create task for controlling the stepper motor (linear axis that guids the cable)
+    xTaskCreate(task_stepper_ctl, "task_stepper_ctl", configMINIMAL_STACK_SIZE * 3, NULL, 2, NULL);
+#endif
+
     //create task for handling the buzzer
     xTaskCreate(&task_buzzer, "task_buzzer", 2048, NULL, 2, NULL);
 

@@ -1,64 +1,68 @@
+extern "C"
+{
+#include <stdio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_idf_version.h>
+#include "freertos/queue.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "driver/adc.h"
+
+#include "max7219.h"
+
+}
+#include <cmath>
+#include "config.h"
+#include "gpio_evaluateSwitch.hpp"
+#include "gpio_adc.hpp"
+#include "buzzer.hpp"
+#include "vfd.hpp"
+#include "display.hpp"
+#include "cutter.hpp"
+#include "encoder.hpp"
+#include "guide-stepper.hpp"
+#include "global.hpp"
 #include "control.hpp"
 
 
-//========================
-//===== init encoder =====
-//========================
-QueueHandle_t init_encoder(rotary_encoder_info_t * info){
-    // esp32-rotary-encoder requires that the GPIO ISR service is installed before calling rotary_encoder_register()
-    ESP_ERROR_CHECK(gpio_install_isr_service(0));
-
-    // Initialise the rotary encoder device with the GPIOs for A and B signals
-    ESP_ERROR_CHECK(rotary_encoder_init(info, ROT_ENC_A_GPIO, ROT_ENC_B_GPIO));
-    ESP_ERROR_CHECK(rotary_encoder_enable_half_steps(info, ENABLE_HALF_STEPS));
-#ifdef FLIP_DIRECTION
-    ESP_ERROR_CHECK(rotary_encoder_flip_direction(info));
-#endif
-
-    // Create a queue for events from the rotary encoder driver.
-    // Tasks can read from this queue to receive up to date position information.
-    QueueHandle_t event_queue = rotary_encoder_create_queue();
-    ESP_ERROR_CHECK(rotary_encoder_set_queue(info, event_queue));
-    return event_queue;
-}
-
-
-
-//====================
-//==== variables =====
-//====================
+//-----------------------------------------
+//--------------- variables ---------------
+//-----------------------------------------
 static const char *TAG = "control"; //tag for logging
 
+//control
 const char* systemStateStr[7] = {"COUNTING", "WINDING_START", "WINDING", "TARGET_REACHED", "AUTO_CUT_WAITING", "CUTTING", "MANUAL"};
 systemState_t controlState = systemState_t::COUNTING;
-uint32_t timestamp_changedState = 0;
+static uint32_t timestamp_lastStateChange = 0;
 
-char buf_disp[20]; //both displays
-char buf_disp1[10];// 8 digits + decimal point + \0
-char buf_disp2[10];// 8 digits + decimal point + \0
-char buf_tmp[15];
+//display
+static char buf_disp1[10];// 8 digits + decimal point + \0
+static char buf_disp2[10];// 8 digits + decimal point + \0
+static char buf_tmp[15];
 
-rotary_encoder_info_t encoder; //encoder device/info
-QueueHandle_t encoder_queue = NULL; //encoder event queue
-rotary_encoder_state_t encoderState;
-
-int lengthNow = 0; //length measured in mm
-int lengthTarget = 5000; //default target length in mm
-int lengthRemaining = 0; //(target - now) length needed for reaching the target
-int potiRead = 0; //voltage read from adc
-uint32_t timestamp_motorStarted = 0; //timestamp winding started
+//track length
+static int lengthNow = 0; //length measured in mm
+static int lengthTarget = 5000; //default target length in mm
+static int lengthRemaining = 0; //(target - now) length needed for reaching the target
+static int potiRead = 0; //voltage read from adc
+static uint32_t timestamp_motorStarted = 0; //timestamp winding started
                                      
-//encoder test / calibration
-int lengthBeeped = 0; //only beep once per meter during encoder test
-                      
 //automatic cut
-int cut_msRemaining = 0;
-uint32_t timestamp_cut_lastBeep = 0;
-uint32_t autoCut_delayMs = 2500; //TODO add this to config
-bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
+static int cut_msRemaining = 0;
+static uint32_t timestamp_cut_lastBeep = 0;
+static uint32_t autoCut_delayMs = 2500; //TODO add this to config
+static bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
 
 
+
+//-----------------------------------------
+//--------------- functions ---------------
+//-----------------------------------------
+
+//========================
 //===== change State =====
+//========================
 //function for changing the controlState with log output
 void changeState (systemState_t stateNew) {
     //only proceed when state actually changed
@@ -70,18 +74,21 @@ void changeState (systemState_t stateNew) {
     //change state
     controlState = stateNew;
     //update timestamp
-    timestamp_changedState = esp_log_timestamp();
+    timestamp_lastStateChange = esp_log_timestamp();
 }
-          
 
 
+
+//=================================
 //===== handle Stop Condition =====
-//function that checks whether start button is released or target is reached (used in multiple states)
-//returns true when stopped, false when no action
+//=================================
+//function that checks whether start button is released or target is reached 
+//and takes according action if so (used in multiple states)
+//returns true when stop condition was met, false when no action required
 bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBot){
     //--- stop conditions ---
     //stop conditions that are checked in any mode
-    //target reached
+    //target reached -> reached state, stop motor, display message
     if (lengthRemaining <= 0 ) {
         changeState(systemState_t::TARGET_REACHED);
         vfd_setState(false);
@@ -90,7 +97,7 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
         buzzer.beep(2, 100, 100);
         return true;
     }
-    //start button released
+    //start button released -> idle state, stop motor, display message
     else if (SW_START.state == false) {
         changeState(systemState_t::COUNTING);
         vfd_setState(false);
@@ -104,8 +111,11 @@ bool handleStopCondition(handledDisplay * displayTop, handledDisplay * displayBo
 }
 
 
+
+//===================================
 //===== set dynamic speed level =====
-//function that sets the vfd speed level dynamicly depending on the remaining distance
+//===================================
+//function that sets the vfd speed level dynamically depending on the remaining distance
 //closer to target -> slower
 void setDynSpeedLvl(uint8_t lvlMax = 3){
     uint8_t lvl;
@@ -133,33 +143,30 @@ void setDynSpeedLvl(uint8_t lvlMax = 3){
 //========================
 //===== control task =====
 //========================
+//task that controls the entire machine
 void task_control(void *pvParameter)
 {
-    //initialize encoder
-    encoder_queue = init_encoder(&encoder);
-
-    //initialize display
+    //-- initialize display --
     max7219_t two7SegDisplays = display_init();
-    //create two separate handled display instances
+    //create two separate custom handled display instances
     handledDisplay displayTop(two7SegDisplays, 0);
     handledDisplay displayBot(two7SegDisplays, 8);
 
-    //--- display welcome msg ---
+    //-- display welcome msg --
     //display welcome message on two 7 segment displays
     //currently show name and date and scrolling 'hello'
     display_ShowWelcomeMsg(two7SegDisplays);
 
-
-    //================
-    //===== loop =====
-    //================
+    // ##############################
+    // ######## control loop ########
+    // ##############################
+    // repeatedly handle the machine
     while(1){
         vTaskDelay(10 / portTICK_PERIOD_MS);
 
-        //-----------------------------
+
         //------ handle switches ------
-        //-----------------------------
-        //run handle functions for all switches
+        //run handle functions for all switches used here
         SW_START.handle();
         SW_RESET.handle();
         SW_SET.handle();
@@ -170,29 +177,23 @@ void task_control(void *pvParameter)
         SW_AUTO_CUT.handle();
 
 
-        //---------------------------
         //------ handle cutter ------
-        //---------------------------
+        //TODO: separate task for cutter?
         cutter_handle();
 
 
-        //----------------------------
         //------ rotary encoder ------
-        //----------------------------
-        // Poll current position and direction
-        rotary_encoder_get_state(&encoder, &encoderState);
-        //--- calculate distance ---
-        lengthNow = (float)encoderState.position * 1000 / STEPS_PER_METER;
+        //get current length since last reset
+        lengthNow = encoder_getLenMm();
 
-
-        //---------------------------
+        
         //--------- buttons ---------
-        //---------------------------
-        //--- RESET switch ---
+        //#### RESET switch ####
         if (SW_RESET.risingEdge) {
             //dont reset when press used for stopping pending auto-cut
             if (controlState != systemState_t::AUTO_CUT_WAITING) {
-                rotary_encoder_reset(&encoder);
+                guide_moveToZero(); //move axis guiding the cable to start position
+                encoder_reset(); //reset length measurement
                 lengthNow = 0;
                 buzzer.beep(1, 700, 100);
                 displayTop.blink(2, 100, 100, "1ST     ");
@@ -201,7 +202,7 @@ void task_control(void *pvParameter)
             }
         }
 
-        //--- CUT switch ---
+        //### CUT switch ####
         //start cut cycle immediately
         if (SW_CUT.risingEdge) {
             //stop cutter if already running
@@ -224,7 +225,7 @@ void task_control(void *pvParameter)
             }
         }
        
-        //--- AUTO_CUT toggle sw ---
+        //#### AUTO_CUT toggle sw ####
         //beep at change
         if (SW_AUTO_CUT.risingEdge) {
             buzzer.beep(2, 100, 50);
@@ -243,7 +244,7 @@ void task_control(void *pvParameter)
             autoCutEnabled = false;
         }
 
-        //--- manual mode ---
+        //#### manual mode ####
         //switch to manual motor control (2 buttons + poti)
         if ( SW_PRESET2.state && (SW_PRESET1.state || SW_PRESET3.state) && controlState != systemState_t::MANUAL ) {
             //enable manual control
@@ -251,7 +252,7 @@ void task_control(void *pvParameter)
             buzzer.beep(3, 100, 60);
         }
 
-        //--- set custom target length ---
+        //##### SET switch #####
         //set target length to poti position when SET switch is pressed
         if (SW_SET.state == true) {
             //read adc
@@ -287,7 +288,7 @@ void task_control(void *pvParameter)
         }
 
 
-        //--- target length presets ---
+        //##### target length preset buttons #####
         if (controlState != systemState_t::MANUAL) { //dont apply preset length while controlling motor with preset buttons
             if (SW_PRESET1.risingEdge) {
                 lengthTarget = 5000;
@@ -307,16 +308,17 @@ void task_control(void *pvParameter)
         }
 
 
-
         //---------------------------
         //--------- control ---------
         //---------------------------
-        //calculate length difference
+        //statemachine handling the sequential winding process
+
+        //calculate current length difference
         lengthRemaining = lengthTarget - lengthNow + TARGET_LENGTH_OFFSET;
 
         //--- statemachine ---
         switch (controlState) {
-            case systemState_t::COUNTING: //no motor action
+            case systemState_t::COUNTING: //no motor action, just show current length on display
                 vfd_setState(false);
                 //TODO check stop condition before starting - prevents motor from starting 2 cycles when already at target
                 //--- start winding to length ---
@@ -332,6 +334,7 @@ void task_control(void *pvParameter)
             case systemState_t::WINDING_START: //wind slow for certain time
                 //set vfd speed depending on remaining distance 
                 setDynSpeedLvl(1); //limit to speed lvl 1 (force slow start)
+                //switch to WINDING state (full speed) when 3s have passed
                 if (esp_log_timestamp() - timestamp_motorStarted > 3000) {
                     changeState(systemState_t::WINDING);
                 }
@@ -341,23 +344,23 @@ void task_control(void *pvParameter)
 
             case systemState_t::WINDING: //wind fast, slow down when close
                 //set vfd speed depending on remaining distance 
-                setDynSpeedLvl(); //slow down when close to target
+                setDynSpeedLvl(); //set motor speed, slow down when close to target
                 handleStopCondition(&displayTop, &displayBot); //stops if button released or target reached
                 //TODO: cancel when there is no cable movement anymore e.g. empty / timeout?
                 break;
 
-            case systemState_t::TARGET_REACHED:
+            case systemState_t::TARGET_REACHED: //prevent further motor rotation and start auto-cut
                 vfd_setState(false);
                 //switch to counting state when no longer at or above target length
                 if ( lengthNow < lengthTarget - TARGET_REACHED_TOLERANCE ) {
                     changeState(systemState_t::COUNTING);
                 }
-                //switch initiate countdown to auto-cut
+                //initiate countdown to auto-cut if enabled
                 else if ( (autoCutEnabled)
-                        && (esp_log_timestamp() - timestamp_changedState > 300) ) { //wait for dislay msg "reached" to finish
+                        && (esp_log_timestamp() - timestamp_lastStateChange > 300) ) { //wait for dislay msg "reached" to finish
                     changeState(systemState_t::AUTO_CUT_WAITING);
                 }
-                //show msg when trying to start, but target is reached
+                //show msg when trying to start, but target is already reached (-> reset button has to be pressed)
                 if (SW_START.risingEdge) {
                     buzzer.beep(2, 50, 30);
                     displayTop.blink(2, 600, 500, "  S0LL  ");
@@ -365,9 +368,8 @@ void task_control(void *pvParameter)
                 }
                 break;
 
-            case systemState_t::AUTO_CUT_WAITING:
-                //handle delayed start of cut
-                cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_changedState);
+            case systemState_t::AUTO_CUT_WAITING: //handle delayed start of cut
+                cut_msRemaining = autoCut_delayMs - (esp_log_timestamp() - timestamp_lastStateChange);
                 //- countdown stop conditions -
                 //stop with any button
                 if (!autoCutEnabled
@@ -391,13 +393,14 @@ void task_control(void *pvParameter)
                 }
                 break;
 
-            case systemState_t::CUTTING:
+            case systemState_t::CUTTING: //prevent any action while cutter is active
                 //exit when finished cutting
                 if (cutter_isRunning() == false) {
                     //TODO stop if start buttons released?
                     changeState(systemState_t::COUNTING);
                     //TODO reset automatically or wait for manual reset?
-                    rotary_encoder_reset(&encoder);
+                    guide_moveToZero(); //move axis guiding the cable to start position
+                    encoder_reset(); //reset length measurement
                     lengthNow = 0;
                     buzzer.beep(1, 700, 100);
                 }
@@ -434,30 +437,34 @@ void task_control(void *pvParameter)
         }
 
 
-
+#ifdef ENCODER_TEST
         //--------------------------
         //------ encoder test ------
         //--------------------------
-#ifdef ENCODER_TEST
+        //mode for calibrating the cable length measurement (determine ENCODER_STEPS_PER_METER in config.h)
         //run display handle functions
         displayTop.handle();
         displayBot.handle();
         //-- show encoder steps on display1 ---
-        sprintf(buf_disp1, "EN %05d", encoderState.position); //count
+        sprintf(buf_disp1, "EN %05d", encoder_getSteps()); //count
         displayTop.showString(buf_disp1);
         //--- show converted distance on display2 ---
         sprintf(buf_disp2, "Met %5.3f", (float)lengthNow/1000); //m
         displayBot.showString(buf_disp2);
-        //--- beep every 1m ---
-        //note: only works precicely in forward/positive direction
-        if (lengthNow % 1000 < 50) { //with tolerance in case of missed exact value
-            if (fabs(lengthNow - lengthBeeped) >= 900) { //dont beep multiple times at same meter
-                //TODO: add case for reverse direction. currently beeps 0.1 too early
-                buzzer.beep(1, 400, 100 );
+        //--- beep every 0.5m ---
+        //note: only works precisely in forward/positive direction, in reverse it it beeps by tolerance too early
+        static int lengthBeeped = 0;
+        if (lengthNow % 500 < 50) { //with tolerance in case of missed exact value
+            if (fabs(lengthNow - lengthBeeped) >= 400) { //dont beep multiple times at same distance
+                //TODO: add case for reverse direction. currently beeps 50mm too early
+                if (lengthNow % 1000 < 50) // 1m beep
+                    buzzer.beep(1, 400, 100);
+                else // 0.5m beep
+                    buzzer.beep(1, 200, 100);
                 lengthBeeped = lengthNow;
             }
         }
-#else
+#else //not in encoder calibration mode
 
         //--------------------------
         //-------- display1 --------
@@ -476,7 +483,6 @@ void task_control(void *pvParameter)
             sprintf(buf_disp1, "%.9s", buf_tmp);
             displayTop.showString(buf_disp1);
         }
-
 
         //--------------------------
         //-------- display2 --------
@@ -510,6 +516,7 @@ void task_control(void *pvParameter)
             displayBot.showString(buf_tmp);
         }
 
+#endif // end else ifdef ENCODER_TEST
 
         //----------------------------
         //------- control lamp -------
@@ -526,10 +533,6 @@ void task_control(void *pvParameter)
             gpio_set_level(GPIO_LAMP, 0);
         }
 
+    } //end while(1)
 
-
-#endif
-        
-    }
-
-}
+} //end task_control
