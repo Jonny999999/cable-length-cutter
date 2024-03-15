@@ -252,9 +252,38 @@ void task_control(void *pvParameter)
             buzzer.beep(3, 100, 60);
         }
 
-        //##### SET switch #####
+        //##### SET switch + Potentiometer #####
+        //## set winding-width (SET+PRESET1+POTI) ##
+        // set winding width (axis travel) with poti position
+        // when SET and PRESET1 button are pressed
+        if (SW_SET.state == true && SW_PRESET1.state == true) {
+            //read adc
+            potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
+            //scale to target length range
+            uint8_t windingWidthNew = (float)potiRead / 4095 * MAX_WINDING_WIDTH_MM;
+            //apply hysteresis and round to whole meters //TODO optimize this
+            if (windingWidthNew % 5 < 2) { //round down if remainder less than 2mm
+                ESP_LOGD(TAG, "Poti input = %d -> rounding down", windingWidthNew);
+                windingWidthNew = (windingWidthNew/5 ) * 5; //round down
+            } else if (windingWidthNew % 5 > 4 ) { //round up if remainder more than 4mm
+                ESP_LOGD(TAG, "Poti input = %d -> rounding up", windingWidthNew);
+                windingWidthNew = (windingWidthNew/5 + 1) * 5; //round up
+            } else {
+                ESP_LOGD(TAG, "Poti input = %d -> hysteresis", windingWidthNew);
+                windingWidthNew = lengthTarget;
+            }
+            //update target width and beep when effectively changed
+            if (windingWidthNew != guide_getWindingWidth()) {
+                //TODO update at button release only?
+                guide_setWindingWidth(windingWidthNew);
+                ESP_LOGW(TAG, "Changed winding width to %d mm", windingWidthNew);
+                buzzer.beep(1, 30, 10);
+            }
+        }
+
+        //## set target length (SET+POTI) ##
         //set target length to poti position when SET switch is pressed
-        if (SW_SET.state == true) {
+        else if (SW_SET.state == true) {
             //read adc
             potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
@@ -475,6 +504,10 @@ void task_control(void *pvParameter)
         if (controlState == systemState_t::AUTO_CUT_WAITING) {
             displayTop.blinkStrings(" CUT 1N ", "        ", 70, 30);
         }
+        //setting winding width: blink info message
+        else if (SW_SET.state && SW_PRESET1.state){
+            displayTop.blinkStrings("  SET   ", " WIDTH  ", 400, 400);
+        }
         //otherwise show current position
         else {
             sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
@@ -489,17 +522,8 @@ void task_control(void *pvParameter)
         //--------------------------
         //run handle function
         displayBot.handle();
-        //setting target length: blink target length
-        if (SW_SET.state == true) {
-            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
-            displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
-        }
-        //manual state: blink "manual"
-        else if (controlState == systemState_t::MANUAL) {
-            displayBot.blinkStrings(" MANUAL ", buf_disp2, 400, 800);
-        }
         //notify that cutter is active
-        else if (cutter_isRunning()) {
+        if (cutter_isRunning()) {
             displayBot.blinkStrings("CUTTING]", "CUTTING[", 100, 100);
         }
         //show ms countdown to cut when pending
@@ -507,6 +531,20 @@ void task_control(void *pvParameter)
             sprintf(buf_disp2, "  %04d  ", cut_msRemaining);
             //displayBot.showString(buf_disp2); //TODO:blink "erreicht" overrides this. for now using blink as workaround
             displayBot.blinkStrings(buf_disp2, buf_disp2, 100, 100);
+        }
+        //manual state: blink "manual"
+        else if (controlState == systemState_t::MANUAL) {
+            displayBot.blinkStrings(" MANUAL ", buf_disp2, 400, 800);
+        }
+        //setting winding width: blink currently set windingWidth
+        else if (SW_SET.state && SW_PRESET1.state){
+            sprintf(buf_tmp, "  %03d mm", lengthNow/1000);
+            displayBot.blinkStrings(buf_tmp, "        ", 300, 100);
+        }
+        //setting target length: blink target length
+        else if (SW_SET.state == true) {
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
+            displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
         }
         //otherwise show target length
         else {
