@@ -95,13 +95,14 @@ void guide_setWindingWidth(uint8_t maxPosMm)
 //=============================
 //=== guide_getWindingWidth ===
 //=============================
-// get currently configured winding width (axis position the guide returns in mm)
+// get currently configured winding width (axis position at which the guide returns in mm)
 uint8_t guide_getWindingWidth()
 {
     if (xSemaphoreTake(configVariables_mutex, portMAX_DELAY) == pdTRUE) // mutex to prevent multiple access by control and stepper-ctl task
     {
-        return posMaxSteps / STEPPER_STEPS_PER_MM;
+        uint8_t returnValue = posMaxSteps / STEPPER_STEPS_PER_MM;
         xSemaphoreGive(configVariables_mutex);
+        return returnValue;
     }
     return 0;
 }
@@ -125,6 +126,12 @@ void guide_moveToZero(){
 void travelSteps(int stepsTarget){
 	//TODO simplify this function, one simple calculation of new position?
 	//with new custom driver no need to detect direction change
+
+    // cancel when width is zero or no steps received
+    if (posMaxSteps == 0 || stepsTarget == 0){
+        ESP_LOGD(TAG, "travelSteps: MaxSteps or stepsTarget = 0 -> nothing to do");
+        return;
+    }
 	
     int stepsToGo, remaining;
 
@@ -349,6 +356,18 @@ void task_stepper_ctl(void *pvParameter)
 
     //repeatedly read changes in measured cable length and move axis accordingly
     while(1){
+
+        // guide is disabled when posMaxSteps is zero:
+        if (posMaxSteps == 0)
+        {
+            // move to starting position
+            stepper_setTargetPosSteps(0);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            ESP_LOGD(TAG, "posMaxSteps is zero -> guide disabled, doing nothing");
+            // stop loop iteration
+            continue;
+        }
+
 #ifdef STEPPER_SIMULATE_ENCODER
 		//TESTING - simulate encoder using switch
 		SW_RESET.handle();

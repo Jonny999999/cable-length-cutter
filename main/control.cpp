@@ -54,6 +54,10 @@ static uint32_t timestamp_cut_lastBeep = 0;
 static uint32_t autoCut_delayMs = 2500; //TODO add this to config
 static bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
 
+//user interface
+static uint32_t timestamp_lastWidthSelect = 0;
+//ignore new set events for that time after last value set using poti
+#define DEAD_TIME_POTI_SET_VALUE 1000
 
 
 //-----------------------------------------
@@ -257,10 +261,11 @@ void task_control(void *pvParameter)
         // set winding width (axis travel) with poti position
         // when SET and PRESET1 button are pressed
         if (SW_SET.state == true && SW_PRESET1.state == true) {
+            timestamp_lastWidthSelect = esp_log_timestamp();
             //read adc
             potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
-            uint8_t windingWidthNew = (float)potiRead / 4095 * MAX_WINDING_WIDTH_MM;
+            uint8_t windingWidthNew = (float)potiRead / 4095 * MAX_SELECTABLE_WINDING_WIDTH_MM;
             //apply hysteresis and round to whole meters //TODO optimize this
             if (windingWidthNew % 5 < 2) { //round down if remainder less than 2mm
                 ESP_LOGD(TAG, "Poti input = %d -> rounding down", windingWidthNew);
@@ -270,7 +275,7 @@ void task_control(void *pvParameter)
                 windingWidthNew = (windingWidthNew/5 + 1) * 5; //round up
             } else {
                 ESP_LOGD(TAG, "Poti input = %d -> hysteresis", windingWidthNew);
-                windingWidthNew = lengthTarget;
+                windingWidthNew = guide_getWindingWidth();
             }
             //update target width and beep when effectively changed
             if (windingWidthNew != guide_getWindingWidth()) {
@@ -282,12 +287,13 @@ void task_control(void *pvParameter)
         }
 
         //## set target length (SET+POTI) ##
-        //set target length to poti position when SET switch is pressed
-        else if (SW_SET.state == true) {
+        //set target length to poti position when only SET button is pressed and certain dead time passed after last setWindingWidth (SET and PRESET1 button) to prevent set target at release
+        // FIXME: when going to edit the winding width (SET+PRESET1) sometimes the target-length also updates when initially pressing SET -> update only at actual poti change (works sometimes)
+        else if (SW_SET.state == true && (esp_log_timestamp() - timestamp_lastWidthSelect > DEAD_TIME_POTI_SET_VALUE)) {
             //read adc
             potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
-            int lengthTargetNew = (float)potiRead / 4095 * 50000;
+            int lengthTargetNew = (float)potiRead / 4095 * MAX_SELECTABLE_LENGTH_POTI_MM;
             //apply hysteresis and round to whole meters //TODO optimize this
             if (lengthTargetNew % 1000 < 200) { //round down if less than .2 meter
                 ESP_LOGD(TAG, "Poti input = %d -> rounding down", lengthTargetNew);
@@ -318,7 +324,7 @@ void task_control(void *pvParameter)
 
 
         //##### target length preset buttons #####
-        if (controlState != systemState_t::MANUAL) { //dont apply preset length while controlling motor with preset buttons
+        if (controlState != systemState_t::MANUAL && SW_SET.state == false) { //dont apply preset length while controlling motor with preset buttons
             if (SW_PRESET1.risingEdge) {
                 lengthTarget = 5000;
                 buzzer.beep(lengthTarget/1000, 25, 30);
@@ -506,7 +512,7 @@ void task_control(void *pvParameter)
         }
         //setting winding width: blink info message
         else if (SW_SET.state && SW_PRESET1.state){
-            displayTop.blinkStrings("  SET   ", " WIDTH  ", 400, 400);
+            displayTop.blinkStrings("SET.WIND", " WIDTH  ", 900, 900);
         }
         //otherwise show current position
         else {
@@ -538,7 +544,7 @@ void task_control(void *pvParameter)
         }
         //setting winding width: blink currently set windingWidth
         else if (SW_SET.state && SW_PRESET1.state){
-            sprintf(buf_tmp, "  %03d mm", lengthNow/1000);
+            sprintf(buf_tmp, "  %03d mm", guide_getWindingWidth());
             displayBot.blinkStrings(buf_tmp, "        ", 300, 100);
         }
         //setting target length: blink target length
