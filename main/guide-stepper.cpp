@@ -92,6 +92,36 @@ void guide_setWindingWidth(uint8_t maxPosMm)
 }
 
 
+//=======================================
+//=== guide_targetLength2WindingWidth ===
+//=======================================
+// calculate dynamic winding width in mm from cable length in mm
+uint8_t guide_targetLength2WindingWidth(int lenMm)
+{
+#ifdef DYNAMIC_WINDING_WIDTH_ENABLED
+    uint8_t width;
+    //--- config ---
+    // define thresholds for winding widths according to target length:
+    if (lenMm <= 5000) // 0-5m
+        width = 15;
+    else if (lenMm <= 10000) // 6-10m
+        width = 25;
+    else if (lenMm <= 15000) // 11-15m
+        width = 30;
+    else if (lenMm <= 25000) // 16-25m
+        width = 65;
+    else // >25m
+        width = GUIDE_MAX_MM;
+    ESP_LOGW(TAG, "length2width: calculated windingWidth=%dmm from targetLength=%dm", width, lenMm);
+    return width;
+#else
+    ESP_LOGD(TAG, "length2width: dynamic windingWidh not enabled, stay at GUIDE_MAX=%d", GUIDE_MAX_MM);
+    return GUIDE_MAX_MM;
+#endif
+//TODO update winding width here as well already?
+}
+
+
 //=============================
 //=== guide_getWindingWidth ===
 //=============================

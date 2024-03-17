@@ -121,6 +121,10 @@
 // max target length that can be selected using potentiometer (SET button)
 #define MAX_SELECTABLE_LENGTH_POTI_MM 100000
 
+// calculate new winding width each time target length changes, according to custom thresholds defined in guide-stepper.cpp
+// if not defined, winding width is always GUIDE_MAX_MM even for short lengths
+#define DYNAMIC_WINDING_WIDTH_ENABLED
+
 
 //--------------------------
 //------ calibration -------

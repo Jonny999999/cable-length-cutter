@@ -161,6 +161,9 @@ void task_control(void *pvParameter)
     //currently show name and date and scrolling 'hello'
     display_ShowWelcomeMsg(two7SegDisplays);
 
+    //-- set initial winding width for default length --
+    guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
+
     // ##############################
     // ######## control loop ########
     // ##############################
@@ -309,6 +312,7 @@ void task_control(void *pvParameter)
             if (lengthTargetNew != lengthTarget) {
                 //TODO update lengthTarget only at button release?
                 lengthTarget = lengthTargetNew;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 ESP_LOGI(TAG, "Changed target length to %d mm", lengthTarget);
                 buzzer.beep(1, 25, 10);
             }
@@ -327,16 +331,19 @@ void task_control(void *pvParameter)
         if (controlState != systemState_t::MANUAL && SW_SET.state == false) { //dont apply preset length while controlling motor with preset buttons
             if (SW_PRESET1.risingEdge) {
                 lengthTarget = 5000;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 10000;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET3.risingEdge) {
                 lengthTarget = 15000;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
@@ -512,7 +519,7 @@ void task_control(void *pvParameter)
         }
         //setting winding width: blink info message
         else if (SW_SET.state && SW_PRESET1.state){
-            displayTop.blinkStrings("SET.WIND", " WIDTH  ", 900, 900);
+            displayTop.blinkStrings("SET WIND", " WIDTH  ", 900, 900);
         }
         //otherwise show current position
         else {
