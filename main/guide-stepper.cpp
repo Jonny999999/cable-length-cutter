@@ -6,6 +6,7 @@ extern "C"
 #include "esp_log.h"
 #include "driver/adc.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 }
 
 #include "stepper.hpp"
@@ -22,35 +23,23 @@ extern "C"
 //---------------------
 //--- configuration ---
 //---------------------
-//also see config.h
-//for pin definition
+//also see config.h 
+//for pin definitions and guide parameters
 
+// configure testing modes
 #define STEPPER_TEST_TRAVEL 65     // mm
-
-#define MIN_MM 0 //TODO add feature so guide stays at zero for some steps (negative MIN_MM?), currently seems appropriate for even winding
-#define MAX_MM 95 //actual reel is 110, but currently guide turned out to stay at max position for too long
-#define POS_MAX_STEPS MAX_MM * STEPPER_STEPS_PER_MM
-#define POS_MIN_STEPS MIN_MM * STEPPER_STEPS_PER_MM
-
-//tolerance added to last stored position at previous shutdown.
-//When calibrating at startup the stepper moves for that sum to get track of zero position (ensure crashes into hardware limit for at least some time)
-#define AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM 20
-#define MAX_TOTAL_AXIS_TRAVEL_MM 103 //max possible travel distance, needed for auto-home
-
 // speeds for testing with potentiometer (test task only)
 #define SPEED_MIN 2.0   // mm/s
 #define SPEED_MAX 70.0  // mm/s
 //note: actual speed is currently defined in config.h with STEPPER_SPEED_DEFAULT
-
-#define LAYER_THICKNESS_MM 5 //height of one cable layer on reel -> increase in radius
-#define D_CABLE 6
-#define D_REEL 160
-#define PI 3.14159
-
-
 //simulate encoder with reset button to test stepper ctl task
 //note STEPPER_TEST has to be defined as well
 //#define STEPPER_SIMULATE_ENCODER
+
+#define PI 3.14159
+//#define POS_MAX_STEPS GUIDE_MAX_MM * STEPPER_STEPS_PER_MM  //note replaced with posMaxSteps
+#define POS_MIN_STEPS GUIDE_MIN_MM * STEPPER_STEPS_PER_MM
+
 
 //----------------------
 //----- variables ------
@@ -67,6 +56,12 @@ static int layerCount = 0;
 // queue for sending commands to task handling guide movement
 static QueueHandle_t queue_commandsGuideTask;
 
+// mutex to prevent multiple axis to config variables also accessed/modified by control task
+SemaphoreHandle_t configVariables_mutex = xSemaphoreCreateMutex();
+
+// configured winding width: position the axis returns again in steps
+static uint32_t posMaxSteps = GUIDE_MAX_MM * STEPPER_STEPS_PER_MM; //assign default width
+
 
 //----------------------
 //----- functions ------
@@ -79,6 +74,67 @@ static QueueHandle_t queue_commandsGuideTask;
 // needed at shutdown detection to store last axis position in nvs
 int guide_getAxisPosSteps(){
     return posNow;
+}
+
+
+//=============================
+//=== guide_setWindingWidth ===
+//=============================
+// set custom winding width (axis position the guide returns in mm)
+void guide_setWindingWidth(uint8_t maxPosMm)
+{
+    if (xSemaphoreTake(configVariables_mutex, portMAX_DELAY) == pdTRUE) // mutex to prevent multiple access by control and stepper-ctl task
+    {
+        posMaxSteps = maxPosMm * STEPPER_STEPS_PER_MM;
+        ESP_LOGI(TAG, "set winding width / max pos to %dmm", maxPosMm);
+        xSemaphoreGive(configVariables_mutex);
+    }
+}
+
+
+//=======================================
+//=== guide_targetLength2WindingWidth ===
+//=======================================
+// calculate dynamic winding width in mm from cable length in mm
+uint8_t guide_targetLength2WindingWidth(int lenMm)
+{
+#ifdef DYNAMIC_WINDING_WIDTH_ENABLED
+    uint8_t width;
+    //--- config ---
+    // define thresholds for winding widths according to target length:
+    if (lenMm <= 5000) // 0-5m
+        width = 15;
+    else if (lenMm <= 10000) // 6-10m
+        width = 25;
+    else if (lenMm <= 15000) // 11-15m
+        width = 30;
+    else if (lenMm <= 25000) // 16-25m
+        width = 65;
+    else // >25m
+        width = GUIDE_MAX_MM;
+    ESP_LOGW(TAG, "length2width: calculated windingWidth=%dmm from targetLength=%dm", width, lenMm);
+    return width;
+#else
+    ESP_LOGD(TAG, "length2width: dynamic windingWidh not enabled, stay at GUIDE_MAX=%d", GUIDE_MAX_MM);
+    return GUIDE_MAX_MM;
+#endif
+//TODO update winding width here as well already?
+}
+
+
+//=============================
+//=== guide_getWindingWidth ===
+//=============================
+// get currently configured winding width (axis position at which the guide returns in mm)
+uint8_t guide_getWindingWidth()
+{
+    if (xSemaphoreTake(configVariables_mutex, portMAX_DELAY) == pdTRUE) // mutex to prevent multiple access by control and stepper-ctl task
+    {
+        uint8_t returnValue = posMaxSteps / STEPPER_STEPS_PER_MM;
+        xSemaphoreGive(configVariables_mutex);
+        return returnValue;
+    }
+    return 0;
 }
 
 
@@ -100,6 +156,12 @@ void guide_moveToZero(){
 void travelSteps(int stepsTarget){
 	//TODO simplify this function, one simple calculation of new position?
 	//with new custom driver no need to detect direction change
+
+    // cancel when width is zero or no steps received
+    if (posMaxSteps == 0 || stepsTarget == 0){
+        ESP_LOGD(TAG, "travelSteps: MaxSteps or stepsTarget = 0 -> nothing to do");
+        return;
+    }
 	
     int stepsToGo, remaining;
 
@@ -113,11 +175,12 @@ void travelSteps(int stepsTarget){
     while (stepsToGo != 0){
         //--- currently moving right ---
         if (currentAxisDirection == AXIS_MOVING_RIGHT){               //currently moving right
-            remaining = POS_MAX_STEPS - posNow;     //calc remaining distance fom current position to limit
+        if (xSemaphoreTake(configVariables_mutex, portMAX_DELAY) == pdTRUE) { //prevent multiple acces on posMaxSteps by control-task
+            remaining = posMaxSteps - posNow;     //calc remaining distance fom current position to limit
             if (stepsToGo > remaining){             //new distance will exceed limit
-                stepper_setTargetPosSteps(POS_MAX_STEPS);        //move to limit
+                stepper_setTargetPosSteps(posMaxSteps);        //move to limit
 				stepper_waitForStop(1000);
-                posNow = POS_MAX_STEPS;
+                posNow = posMaxSteps;
                 currentAxisDirection = AXIS_MOVING_LEFT;            //change current direction for next iteration
                 //increment/decrement layer count depending on current cable direction
                 layerCount += (stepsTarget > 0) - (stepsTarget < 0);
@@ -131,6 +194,8 @@ void travelSteps(int stepsTarget){
                 posNow += stepsToGo;
                 stepsToGo = 0;                      //finished, reset target length (could as well exit loop/break)
             }
+            xSemaphoreGive(configVariables_mutex);
+        }
         }
 
         //--- currently moving left ---
@@ -321,6 +386,18 @@ void task_stepper_ctl(void *pvParameter)
 
     //repeatedly read changes in measured cable length and move axis accordingly
     while(1){
+
+        // guide is disabled when posMaxSteps is zero:
+        if (posMaxSteps == 0)
+        {
+            // move to starting position
+            stepper_setTargetPosSteps(0);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            ESP_LOGD(TAG, "posMaxSteps is zero -> guide disabled, doing nothing");
+            // stop loop iteration
+            continue;
+        }
+
 #ifdef STEPPER_SIMULATE_ENCODER
 		//TESTING - simulate encoder using switch
 		SW_RESET.handle();

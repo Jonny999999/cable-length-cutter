@@ -54,6 +54,10 @@ static uint32_t timestamp_cut_lastBeep = 0;
 static uint32_t autoCut_delayMs = 2500; //TODO add this to config
 static bool autoCutEnabled = false; //store state of toggle switch (no hotswitch)
 
+//user interface
+static uint32_t timestamp_lastWidthSelect = 0;
+//ignore new set events for that time after last value set using poti
+#define DEAD_TIME_POTI_SET_VALUE 1000
 
 
 //-----------------------------------------
@@ -157,6 +161,9 @@ void task_control(void *pvParameter)
     //currently show name and date and scrolling 'hello'
     display_ShowWelcomeMsg(two7SegDisplays);
 
+    //-- set initial winding width for default length --
+    guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
+
     // ##############################
     // ######## control loop ########
     // ##############################
@@ -252,13 +259,44 @@ void task_control(void *pvParameter)
             buzzer.beep(3, 100, 60);
         }
 
-        //##### SET switch #####
-        //set target length to poti position when SET switch is pressed
-        if (SW_SET.state == true) {
+        //##### SET switch + Potentiometer #####
+        //## set winding-width (SET+PRESET1+POTI) ##
+        // set winding width (axis travel) with poti position
+        // when SET and PRESET1 button are pressed
+        if (SW_SET.state == true && SW_PRESET1.state == true) {
+            timestamp_lastWidthSelect = esp_log_timestamp();
             //read adc
             potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
             //scale to target length range
-            int lengthTargetNew = (float)potiRead / 4095 * 50000;
+            uint8_t windingWidthNew = (float)potiRead / 4095 * MAX_SELECTABLE_WINDING_WIDTH_MM;
+            //apply hysteresis and round to whole meters //TODO optimize this
+            if (windingWidthNew % 5 < 2) { //round down if remainder less than 2mm
+                ESP_LOGD(TAG, "Poti input = %d -> rounding down", windingWidthNew);
+                windingWidthNew = (windingWidthNew/5 ) * 5; //round down
+            } else if (windingWidthNew % 5 > 4 ) { //round up if remainder more than 4mm
+                ESP_LOGD(TAG, "Poti input = %d -> rounding up", windingWidthNew);
+                windingWidthNew = (windingWidthNew/5 + 1) * 5; //round up
+            } else {
+                ESP_LOGD(TAG, "Poti input = %d -> hysteresis", windingWidthNew);
+                windingWidthNew = guide_getWindingWidth();
+            }
+            //update target width and beep when effectively changed
+            if (windingWidthNew != guide_getWindingWidth()) {
+                //TODO update at button release only?
+                guide_setWindingWidth(windingWidthNew);
+                ESP_LOGW(TAG, "Changed winding width to %d mm", windingWidthNew);
+                buzzer.beep(1, 30, 10);
+            }
+        }
+
+        //## set target length (SET+POTI) ##
+        //set target length to poti position when only SET button is pressed and certain dead time passed after last setWindingWidth (SET and PRESET1 button) to prevent set target at release
+        // FIXME: when going to edit the winding width (SET+PRESET1) sometimes the target-length also updates when initially pressing SET -> update only at actual poti change (works sometimes)
+        else if (SW_SET.state == true && (esp_log_timestamp() - timestamp_lastWidthSelect > DEAD_TIME_POTI_SET_VALUE)) {
+            //read adc
+            potiRead = gpio_readAdc(ADC_CHANNEL_POTI); //0-4095
+            //scale to target length range
+            int lengthTargetNew = (float)potiRead / 4095 * MAX_SELECTABLE_LENGTH_POTI_MM;
             //apply hysteresis and round to whole meters //TODO optimize this
             if (lengthTargetNew % 1000 < 200) { //round down if less than .2 meter
                 ESP_LOGD(TAG, "Poti input = %d -> rounding down", lengthTargetNew);
@@ -274,6 +312,7 @@ void task_control(void *pvParameter)
             if (lengthTargetNew != lengthTarget) {
                 //TODO update lengthTarget only at button release?
                 lengthTarget = lengthTargetNew;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 ESP_LOGI(TAG, "Changed target length to %d mm", lengthTarget);
                 buzzer.beep(1, 25, 10);
             }
@@ -289,19 +328,22 @@ void task_control(void *pvParameter)
 
 
         //##### target length preset buttons #####
-        if (controlState != systemState_t::MANUAL) { //dont apply preset length while controlling motor with preset buttons
+        if (controlState != systemState_t::MANUAL && SW_SET.state == false) { //dont apply preset length while controlling motor with preset buttons
             if (SW_PRESET1.risingEdge) {
                 lengthTarget = 5000;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET2.risingEdge) {
                 lengthTarget = 10000;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
             else if (SW_PRESET3.risingEdge) {
                 lengthTarget = 15000;
+                guide_setWindingWidth(guide_targetLength2WindingWidth(lengthTarget));
                 buzzer.beep(lengthTarget/1000, 25, 30);
                 displayBot.blink(2, 100, 100, "S0LL    ");
             }
@@ -475,6 +517,10 @@ void task_control(void *pvParameter)
         if (controlState == systemState_t::AUTO_CUT_WAITING) {
             displayTop.blinkStrings(" CUT 1N ", "        ", 70, 30);
         }
+        //setting winding width: blink info message
+        else if (SW_SET.state && SW_PRESET1.state){
+            displayTop.blinkStrings("SET WIND", " WIDTH  ", 900, 900);
+        }
         //otherwise show current position
         else {
             sprintf(buf_tmp, "1ST %5.4f", (float)lengthNow/1000);
@@ -489,17 +535,8 @@ void task_control(void *pvParameter)
         //--------------------------
         //run handle function
         displayBot.handle();
-        //setting target length: blink target length
-        if (SW_SET.state == true) {
-            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
-            displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
-        }
-        //manual state: blink "manual"
-        else if (controlState == systemState_t::MANUAL) {
-            displayBot.blinkStrings(" MANUAL ", buf_disp2, 400, 800);
-        }
         //notify that cutter is active
-        else if (cutter_isRunning()) {
+        if (cutter_isRunning()) {
             displayBot.blinkStrings("CUTTING]", "CUTTING[", 100, 100);
         }
         //show ms countdown to cut when pending
@@ -507,6 +544,20 @@ void task_control(void *pvParameter)
             sprintf(buf_disp2, "  %04d  ", cut_msRemaining);
             //displayBot.showString(buf_disp2); //TODO:blink "erreicht" overrides this. for now using blink as workaround
             displayBot.blinkStrings(buf_disp2, buf_disp2, 100, 100);
+        }
+        //manual state: blink "manual"
+        else if (controlState == systemState_t::MANUAL) {
+            displayBot.blinkStrings(" MANUAL ", buf_disp2, 400, 800);
+        }
+        //setting winding width: blink currently set windingWidth
+        else if (SW_SET.state && SW_PRESET1.state){
+            sprintf(buf_tmp, "  %03d mm", guide_getWindingWidth());
+            displayBot.blinkStrings(buf_tmp, "        ", 300, 100);
+        }
+        //setting target length: blink target length
+        else if (SW_SET.state == true) {
+            sprintf(buf_tmp, "S0LL%5.3f", (float)lengthTarget/1000);
+            displayBot.blinkStrings(buf_tmp, "S0LL    ", 300, 100);
         }
         //otherwise show target length
         else {

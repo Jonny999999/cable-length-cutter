@@ -101,6 +101,30 @@
 //options affecting movement are currently defined in guide-stepper.cpp
 
 
+//---------------------------
+//------- cable guide -------
+//---------------------------
+// default axis coordinates the guide changes direction (winding width)
+#define GUIDE_MIN_MM 0  // TODO add feature so guide stays at zero for some steps (negative MIN_MM?), currently seems appropriate for even winding
+#define GUIDE_MAX_MM 90 // 95 still to long at max pos - actual reel is 110, but currently guide turned out to stay at max position for too long, due to cable running diagonal from guide to reel
+
+// tolerance added to last stored position at previous shutdown.
+// When calibrating at startup the stepper moves for that sum to get track of zero position (ensure crashes into hardware limit for at least some time)
+#define AUTO_HOME_TRAVEL_ADD_TO_LAST_POS_MM 20
+#define MAX_TOTAL_AXIS_TRAVEL_MM 103 // max possible travel distance, needed as fallback for auto-home
+#define LAYER_THICKNESS_MM 5         // height of one cable layer on reel -> increase in radius every layer
+#define D_CABLE 6                    // determines winds per layer / guide speed
+#define D_REEL 160                   // start diameter of empty reel
+
+// max winding width that can be set using potentiometer (SET+PRESET1 buttons)
+#define MAX_SELECTABLE_WINDING_WIDTH_MM 100;
+// max target length that can be selected using potentiometer (SET button)
+#define MAX_SELECTABLE_LENGTH_POTI_MM 100000
+
+// calculate new winding width each time target length changes, according to custom thresholds defined in guide-stepper.cpp
+// if not defined, winding width is always GUIDE_MAX_MM even for short lengths
+#define DYNAMIC_WINDING_WIDTH_ENABLED
+
 
 //--------------------------
 //------ calibration -------
